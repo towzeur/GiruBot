@@ -1,8 +1,10 @@
+from urllib.request import Request
 import discord
 import asyncio
 import youtube_dl
 from enum import Enum
 from pprint import pprint
+from dataclasses import dataclass
 
 import text_en as TEXT
 
@@ -12,6 +14,19 @@ from utils import convert_to_youtube_time_format, Markdown
 
 # Fuck your useless bugreports message that gets two link embeds and confuses users
 youtube_dl.utils.bug_reports_message = lambda: ""
+
+
+from functools import wraps
+
+
+def my_decorator(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        print("@", f.__name__)
+        return f(*args, **kwargs)
+
+    return wrapper
+
 
 # ------------------------------------------------------------------------------
 
@@ -40,14 +55,6 @@ DEFAULT_VOLUME = 0.5
 # ------------------------------------------------------------------------------
 
 
-def search_youtube(query):
-    with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-        info = ydl.extract_info(query, download=False)
-    if "entries" in info:  # playlist
-        info = info["entries"][0]
-    return info
-
-
 # ------------------------------------------------------------------------------
 
 
@@ -68,13 +75,14 @@ class GiruState(Enum):
 
 
 class GiruMusic:
-    def __init__(self):
+    def __init__(self, client):
+        self.client = client
+
         self.q = asyncio.Queue()
         self.open, self.close = [], []
         self.state = GiruState.IDLE
-        self.loop = False
-        self.a = "A"
 
+        self.loop_on = False
         self.voice = None
 
         # audio = discord.FFmpegPCMAudio(
@@ -94,50 +102,97 @@ class GiruMusic:
 
     async def run(self):
         try:
-            print("[run] try")
             while True:
-                handler, message, args = await self.q.get()
-                await handler(message, args)
+                tmp = await self.q.get()
+                if type(tmp) == tuple:
+                    handler, args = tmp[0], tmp[1:]
+                    await handler(*args)
+                else:
+                    await tmp()
         except Exception as e:  #  asyncio.CancelledError
             print("[run] Exception", e)
         finally:
             print("[run] finally")
 
-    def play_after(self, e):
-        print("play_after")
-        if e:
-            print("PLAY AFTER", "e", e)
+    @my_decorator
+    def _play_after(self, e):
+        print(e)
+        self.state = GiruState.IDLE
 
-    async def play(self, message, args):
-        print("PLAY")
+        if not self.loop_on:
+            req_ok = self.open.pop(0)
+            self.close.append(req_ok)
 
-        if self.state is GiruState.IDLE:
-            self.open.append(args)
-            await self.ensure_voice(message.author.voice.channel)
-            audio = discord.FFmpegPCMAudio(args, executable="ffmpeg.exe")
-            player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
-            self.voice.play(player, after=self.play_after)
-
-        elif self.state is GiruState.PLAYING:
+        coro = self.put(self._consume)
+        fut = asyncio.run_coroutine_threadsafe(coro, self.client.loop)
+        # client.loop)
+        try:
+            fut.result()
+        except:
             pass
 
+    @my_decorator
+    async def _play_now(self, req):
+        await self.ensure_voice(req.message.author.voice.channel)
+        audio = discord.FFmpegPCMAudio(req.url, executable="ffmpeg.exe")
+        player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
+        self.voice.play(player, after=self._play_after)
+
+    @my_decorator
+    async def _consume(self):
+        if not self.open:
+            print("DEBUG", "nothing to consume")
+        req = self.open[0]
+        if self.state is GiruState.IDLE:
+            self.state = GiruState.PLAYING
+            await self._play_now(req)
+        elif self.state is GiruState.PLAYING:
+            pass
         elif self.state is GiruState.PAUSED:
-            self.open.append(args)
+            pass
 
-    def skip(self, message, args):
+    @my_decorator
+    async def play(self, req):
+        self.open.append(req)
+        await self.put(self._consume)
+
+    def skip(self):
         pass
 
-    def stop(self, message, args):
+    def stop(self):
         pass
 
-    def pause(self, message, args):
+    def pause(self):
         pass
 
-    def resume(self, message, args):
+    def resume(self):
         pass
 
-    def loop(self, message, args):
-        self.loop = not self.loop
+    def loop(self):
+        self.loop_on = not self.loop_on
+        return self.loop_on
+
+
+# ------------------------------------------------------------------------------
+
+
+@dataclass
+class Request:
+    """Class for keeping track of an item in inventory."""
+
+    message: discord.Message
+    query: str
+    title: str
+    url: str
+    duration: float
+
+    @classmethod
+    def from_youtube(cls, query, message):
+        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(query, download=False)
+        if "entries" in info:  # playlist
+            info = info["entries"][0]
+        return cls(message, query, info["title"], info["url"], info["duration"])
 
 
 # ------------------------------------------------------------------------------
@@ -148,22 +203,8 @@ class GiruMusicBot:
         self.client = client
         self.server_id = server_id
 
-        self.girumusic = GiruMusic()
-        print(self.girumusic.a, "TESTTTTTTTTTTTTTTTT")
+        self.girumusic = GiruMusic(self.client)
         self.client.loop.create_task(self.girumusic.run())
-
-    # async def ensure_voice(self, author_channel):
-    #    author_channel =
-    # Check if there is already a voice in the server
-    # self.voice = discord.utils.find(
-    #    lambda v: v.guild.id == self.server_id, self.client.voice_clients
-    # )
-    # there is no voice in the guild
-    #    if self.voice is None:
-    #        self.voice = await author_channel.connect()
-    # not in the right voice channel
-    #    if self.voice.channel.id != author_channel.id:
-    #        await self.voice.move_to(author_channel)
 
     ########################
 
@@ -174,12 +215,13 @@ class GiruMusicBot:
 
         # searching for the given query
         await message.channel.send(TEXT.notif_loop_searching.format(query))
-        info = search_youtube(query)
-        if info is None:
+        req = Request.from_youtube(query, message)
+        print(req)
+        if req is None:
             return await message.channel.send(TEXT.error_no_matches)
 
         # play the song
-        await self.girumusic.put((self.girumusic.play, message, info["url"]))
+        await self.girumusic.put((self.girumusic.play, req))
 
         # embed message
         # if the queue isn't empty
@@ -187,7 +229,7 @@ class GiruMusicBot:
         if self.girumusic.voice.is_playing():
             embed = discord.Embed(
                 title="Added to queue",
-                description=Markdown.bold(info["title"]),
+                description=Markdown.bold(req.title),
                 color=0x00AFF4,
             )
             # embed.set_image(*, query)
@@ -198,7 +240,7 @@ class GiruMusicBot:
             )
             embed.add_field(
                 name=Markdown.bold("Song Duration"),
-                value=convert_to_youtube_time_format(info["duration"]),
+                value=convert_to_youtube_time_format(req.duration),
                 inline=True,
             )
             embed.add_field(
@@ -266,8 +308,7 @@ class GiruMusicBot:
         return await message.channel.send(TEXT.error_nothing_playing)
 
     async def loop_handler(self, message):
-        self.loop = not self.loop
-        if self.loop:
+        if self.girumusic.loop():
             return await message.channel.send(TEXT.notif_loop_enabled)
-        else:
-            return await message.channel.send(TEXT.notif_loop_disabled)
+        return await message.channel.send(TEXT.notif_loop_disabled)
+

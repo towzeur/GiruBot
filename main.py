@@ -33,17 +33,13 @@ class GiruClient(discord.Client):
         self.music_bots = {}
         self.game = discord.Game("Giru bot v2")
 
-    async def play_from_youtube(self, message, query):
-        server_id = message.guild.id
-
+    def get_music_bot(self, message):
         # get the music bot or init it
-        music_bot = self.music_bots.get(server_id, None)
+        music_bot = self.music_bots.get(message.guild.id, None)
         if music_bot is None:
-            music_bot = GiruMusicBot(self, server_id)
-            self.music_bots[server_id] = music_bot
-
-        # play it
-        return await music_bot.play_handler(message, query)
+            music_bot = GiruMusicBot(self, message.guild.id)
+            self.music_bots[message.guild.id] = music_bot
+        return music_bot
 
     async def on_ready(self):
         debug("Logged on as", self.user)
@@ -97,30 +93,28 @@ class GiruClient(discord.Client):
         if message.content.startswith("!p "):
             query = message.content[len("!p ") :].strip()
             debug("YOUTUBE (!p)", query)
-            return await self.play_from_youtube(message, query)
+            music_bot = self.get_music_bot(message)
+            return await music_bot.play_handler(message, query)
 
         # CONCERNED BY THIS MESSAGE
-        if message.content.startswith("!g "):
-            msg_args = message.content.split()[1:]
-            debug(str(msg_args))
+        prefix = "!"
+        if message.content.startswith(prefix):
+            msg_args = message.content[len(prefix) :].split()
+            # debug(str(msg_args))
+
+            music_bot = self.get_music_bot(message)
 
             if msg_args[0] == "join":
-                music_bot = self.music_bots.get(message.guild.id, None)
                 return await music_bot.join_handler(message)
             elif msg_args[0] == "disconnect":
-                music_bot = self.music_bots.get(message.guild.id, None)
                 return await music_bot.disconnect_handler(message)
             elif msg_args[0] == "pause":
-                music_bot = self.music_bots.get(message.guild.id, None)
                 return await music_bot.pause_handler(message)
             elif msg_args[0] == "resume":
-                music_bot = self.music_bots.get(message.guild.id, None)
                 return await music_bot.resume_handler(message)
             elif msg_args[0] == "skip":
-                music_bot = self.music_bots.get(message.guild.id, None)
                 return await music_bot.skip_handler(message)
             elif msg_args[0] == "loop":
-                music_bot = self.music_bots.get(message.guild.id, None)
                 return await music_bot.loop_handler(message)
 
             if msg_args[0] == "hello":
