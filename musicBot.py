@@ -45,7 +45,7 @@ YDL_OPTIONS = {
     "logtostderr": False,
     "quiet": True,
     "no_warnings": True,
-    "default_search": "auto",
+    "default_search": "ytsearch",  # "auto"
     "source_address": "0.0.0.0",  # bind to ipv4 since ipv6 addresses cause issues sometimes
     "usenetrc": True,
 }
@@ -119,8 +119,9 @@ class GiruMusic:
         self.state = GiruState.IDLE
 
         if not self.looped_playback:
-            req_ok = self.open.pop(0)
-            self.close.append(req_ok)
+            if self.open:
+                req_ok = self.open.pop(0)
+                self.close.append(req_ok)
 
         coro = self.put(self._consume)
         fut = asyncio.run_coroutine_threadsafe(coro, self.client.loop)
@@ -183,8 +184,12 @@ class GiruMusic:
         self.open.append(req)
         await self.put(self._consume)
 
+    @my_decorator
     def skip(self):
-        pass
+        # if self.open:
+        #    req_skip = self.open.pop(0)
+        #    self.close.append(req_skip)
+        self.voice.stop()
 
     def stop(self):
         pass
@@ -221,9 +226,9 @@ class Request:
         # with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
         #    info = ydl.extract_info(query, download=False)
 
-        # ²²ytdl = youtube_dl.YoutubeDL(YDL_OPTIONS)
+        # ytdl = youtube_dl.YoutubeDL(YDL_OPTIONS)
         loop = asyncio.get_event_loop()
-        downloader = partial(cls.ytdl.extract_info, query, download=True)
+        downloader = partial(cls.ytdl.extract_info, query, download=False)
         # , process=False)
         info = await loop.run_in_executor(None, downloader)
 
@@ -256,7 +261,7 @@ class Request:
         # embed.set_image(self.info["thumbnail"])
         embed.add_field(name=self.title, value=f"[Click]({self.url})")
 
-        embed.set_thumbnail(url=self.source.thumbnail)
+        embed.set_thumbnail(url=self.info["thumbnail"])
 
         embed.add_field(
             name=Markdown.bold("Channel"),
@@ -322,7 +327,7 @@ class GiruMusicBot:
         await message.channel.send(TEXT.notif_disconnected)
 
     async def pause_handler(self, message):
-        if self.voice is None:
+        if self.girumusic.voice is None:
             await message.channel.send(TEXT.error_no_voice_channel)
 
         if not self.voice.is_paused():
@@ -333,23 +338,21 @@ class GiruMusicBot:
         return await message.channel.send(TEXT.error_already_paused)
 
     async def resume_handler(self, message):
-        if self.voice is None:
+        if self.girumusic.voice is None:
             return await message.channel.send(TEXT.error_no_voice_channel)
 
         if self.voice.is_paused():
             self.voice.resume()
-            self.event.set()
             return await message.channel.send(TEXT.notif_resumed)
 
         return await message.channel.send(TEXT.error_not_paused)
 
     async def skip_handler(self, message):
-        if self.voice is None:
+        if self.girumusic.voice is None:
             return await message.channel.send(TEXT.error_no_voice_channel)
 
-        if self.voice.is_playing():
-            self.voice.source = None
-            self.event.set()
+        if self.girumusic.state is GiruState.PLAYING:
+            self.girumusic.skip()
             return await message.channel.send(TEXT.notif_skipped)
 
         return await message.channel.send(TEXT.error_nothing_playing)
