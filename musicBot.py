@@ -7,6 +7,8 @@ import youtube_dl
 from enum import Enum
 from pprint import pprint
 from dataclasses import dataclass
+from collections.abc import Iterable
+from functools import partial
 
 import text_en as TEXT
 
@@ -84,14 +86,8 @@ class GiruMusic:
         self.open, self.close = [], []
         self.state = GiruState.IDLE
 
-        self.loop_on = False
-        self.voice = None
-
-        # audio = discord.FFmpegPCMAudio(
-        #        new_source, executable="ffmpeg.exe", **ffmpeg_options
-        # )
-        # player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
-        # self.voice.play(player, after=play_after_callback)
+        self.voice: discord.VoiceClient = None
+        self.looped_playback: bool = False
 
     async def ensure_voice(self, channel):
         if self.voice is None:
@@ -99,18 +95,19 @@ class GiruMusic:
         if self.voice.channel.id != channel.id:
             await self.voice.move_to(channel)
 
-    async def put(self, e):
-        await self.q.put(e)
+    async def put(self, callback, *args, **kwargs):
+        await self.q.put(partial(callback, *args, **kwargs))
 
     async def run(self):
         try:
             while True:
-                tmp = await self.q.get()
-                if type(tmp) == tuple:
-                    handler, args = tmp[0], tmp[1:]
-                    await handler(*args)
-                else:
-                    await tmp()
+                callback = await self.q.get()
+                await callback()
+                # if isinstance(tmp, Iterable):
+                #    handler, args = tmp[0], tmp[1:]
+                #    await handler(*args)
+                # else:
+                #    await tmp()
         except Exception as e:  #  asyncio.CancelledError
             print("[run] Exception", e)
         finally:
@@ -121,7 +118,7 @@ class GiruMusic:
         print(e)
         self.state = GiruState.IDLE
 
-        if not self.loop_on:
+        if not self.looped_playback:
             req_ok = self.open.pop(0)
             self.close.append(req_ok)
 
@@ -145,20 +142,39 @@ class GiruMusic:
     @my_decorator
     async def _play_now(self, req):
         await self._join(req.message.author.voice.channel)
-        audio = discord.FFmpegPCMAudio(req.url, executable="ffmpeg.exe")
-        player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
-        self.voice.play(player, after=self._play_after)
+        # audio = discord.FFmpegPCMAudio(req.url, executable="ffmpeg.exe")
+        # before_options="-nostdin"
+        # , stderr=subprocess.PIPE
+        audio = discord.FFmpegPCMAudio(
+            req.url,
+            executable="ffmpeg",
+            pipe=False,
+            stderr=None,
+            before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",  # "-nostdin",
+            options="-vn",
+        )
+        # player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
+        self.voice.play(audio, after=self._play_after)
 
     @my_decorator
     async def _consume(self):
         if not self.open:
             print("DEBUG", "nothing to consume")
+            return
+
         req = self.open[0]
         if self.state is GiruState.IDLE:
             self.state = GiruState.PLAYING
             await self._play_now(req)
+            return await req.message.channel.send(
+                TEXT.notif_playing_now.format(req.title)
+            )
         elif self.state is GiruState.PLAYING:
-            pass
+            return await req.message.channel.send(
+                embed=req.create_embed_queued(
+                    estimated=1000, position=len(self.open) - 1
+                )
+            )
         elif self.state is GiruState.PAUSED:
             pass
 
@@ -180,8 +196,8 @@ class GiruMusic:
         pass
 
     def loop(self):
-        self.loop_on = not self.loop_on
-        return self.loop_on
+        self.looped_playback = not self.looped_playback
+        return self.looped_playback
 
 
 # ------------------------------------------------------------------------------
@@ -193,26 +209,55 @@ class Request:
 
     message: discord.Message
     query: str
+    info: dict
     title: str
     url: str
     duration: float
 
-    @classmethod
-    def from_youtube(cls, query, message):
-        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-            info = ydl.extract_info(query, download=False)
-        if "entries" in info:  # playlist
-            info = info["entries"][0]
-        return cls(message, query, info["title"], info["url"], info["duration"])
+    ytdl = youtube_dl.YoutubeDL(YDL_OPTIONS)
 
-    @property
-    def embed_queued(self):
+    @classmethod
+    async def from_youtube(cls, query, message):
+        # with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+        #    info = ydl.extract_info(query, download=False)
+
+        # ²²ytdl = youtube_dl.YoutubeDL(YDL_OPTIONS)
+        loop = asyncio.get_event_loop()
+        downloader = partial(cls.ytdl.extract_info, query, download=True)
+        # , process=False)
+        info = await loop.run_in_executor(None, downloader)
+
+        if "entries" in info:
+            entry = None
+            while entry is None:
+                try:
+                    entry = info["entries"].pop(0)
+                except IndexError:
+                    return None
+        else:
+            entry = info
+
+        # pprint(info)
+        return cls(
+            message, query, entry, entry["title"], entry["url"], entry["duration"]
+        )
+
+    def create_embed_queued(self, estimated="???", position="???"):
         embed = discord.Embed(
             title="Added to queue",
             description=Markdown.bold(self.title),
             color=0x00AFF4,
+            url=self.url,
         )
         # embed.set_image(*, query)
+        # embed.set_thumbnail(*, url)
+        # embed.set_author(*, name, url=Embed.Empty, icon_url=Embed.Empty)
+        # print(self.info["thumbnail"])
+        # embed.set_image(self.info["thumbnail"])
+        embed.add_field(name=self.title, value=f"[Click]({self.url})")
+
+        embed.set_thumbnail(url=self.source.thumbnail)
+
         embed.add_field(
             name=Markdown.bold("Channel"),
             value=str(self.message.author.voice.channel),
@@ -220,18 +265,16 @@ class Request:
         )
         embed.add_field(
             name=Markdown.bold("Song Duration"),
-            value=convert_to_youtube_time_format(self.req.duration),
+            value=convert_to_youtube_time_format(self.duration),
             inline=True,
         )
         embed.add_field(
             name=Markdown.bold("Estimated time until playing"),
-            value="???",
-            inline=False,
+            value=convert_to_youtube_time_format(estimated),
+            inline=True,
         )
         embed.add_field(
-            name=Markdown.bold("Position in queue"),
-            value=str(self.queue.qsize()),
-            inline=True,
+            name=Markdown.bold("Position in queue"), value=position, inline=True,
         )
         return embed
 
@@ -248,7 +291,7 @@ class GiruMusicBot:
         self.client.loop.create_task(self.girumusic.run())
 
     ########################
-    @staticmethod
+
     async def play_handler(self, message, query):
         # user have to be in a voice channel
         if message.author.voice is None:
@@ -256,20 +299,13 @@ class GiruMusicBot:
 
         # searching for the given query
         await message.channel.send(TEXT.notif_loop_searching.format(query))
-        req = Request.from_youtube(query, message)
-        print(req)
+        req = await Request.from_youtube(query, message)
+
         if req is None:
             return await message.channel.send(TEXT.error_no_matches)
 
         # play the song
-        await self.girumusic.put((self.girumusic.play, req))
-
-        if self.girumusic.voice.is_playing():
-            # if the queue isn't empty
-            return await message.channel.send(embed=req.embed_queued)
-        else:
-            # now playing
-            return await message.channel.send(TEXT.notif_playing_now.format(req.info))
+        await self.girumusic.put(self.girumusic.play, req)
 
     async def join_handler(self, message):
         if message.author.voice is None:
