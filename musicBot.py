@@ -1,6 +1,8 @@
+from re import S
 from urllib.request import Request
 import discord
 import asyncio
+from discord.channel import VoiceChannel
 import youtube_dl
 from enum import Enum
 from pprint import pprint
@@ -132,8 +134,17 @@ class GiruMusic:
             pass
 
     @my_decorator
+    async def _join(self, channel):
+        await self.ensure_voice(channel)
+
+    @my_decorator
+    async def _disconnect(self):
+        if self.voice:
+            await self.voice.disconnect()
+
+    @my_decorator
     async def _play_now(self, req):
-        await self.ensure_voice(req.message.author.voice.channel)
+        await self._join(req.message.author.voice.channel)
         audio = discord.FFmpegPCMAudio(req.url, executable="ffmpeg.exe")
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         self.voice.play(player, after=self._play_after)
@@ -194,6 +205,36 @@ class Request:
             info = info["entries"][0]
         return cls(message, query, info["title"], info["url"], info["duration"])
 
+    @property
+    def embed_queued(self):
+        embed = discord.Embed(
+            title="Added to queue",
+            description=Markdown.bold(self.title),
+            color=0x00AFF4,
+        )
+        # embed.set_image(*, query)
+        embed.add_field(
+            name=Markdown.bold("Channel"),
+            value=str(self.message.author.voice.channel),
+            inline=True,
+        )
+        embed.add_field(
+            name=Markdown.bold("Song Duration"),
+            value=convert_to_youtube_time_format(self.req.duration),
+            inline=True,
+        )
+        embed.add_field(
+            name=Markdown.bold("Estimated time until playing"),
+            value="???",
+            inline=False,
+        )
+        embed.add_field(
+            name=Markdown.bold("Position in queue"),
+            value=str(self.queue.qsize()),
+            inline=True,
+        )
+        return embed
+
 
 # ------------------------------------------------------------------------------
 
@@ -207,7 +248,7 @@ class GiruMusicBot:
         self.client.loop.create_task(self.girumusic.run())
 
     ########################
-
+    @staticmethod
     async def play_handler(self, message, query):
         # user have to be in a voice channel
         if message.author.voice is None:
@@ -223,56 +264,26 @@ class GiruMusicBot:
         # play the song
         await self.girumusic.put((self.girumusic.play, req))
 
-        # embed message
-        # if the queue isn't empty
-        return
         if self.girumusic.voice.is_playing():
-            embed = discord.Embed(
-                title="Added to queue",
-                description=Markdown.bold(req.title),
-                color=0x00AFF4,
-            )
-            # embed.set_image(*, query)
-            embed.add_field(
-                name=Markdown.bold("Channel"),
-                value=str(message.author.voice.channel),
-                inline=True,
-            )
-            embed.add_field(
-                name=Markdown.bold("Song Duration"),
-                value=convert_to_youtube_time_format(req.duration),
-                inline=True,
-            )
-            embed.add_field(
-                name=Markdown.bold("Estimated time until playing"),
-                value="???",
-                inline=False,
-            )
-            embed.add_field(
-                name=Markdown.bold("Position in queue"),
-                value=str(self.queue.qsize()),
-                inline=True,
-            )
-            return await message.channel.send(embed=embed)
-
-        # now playing
-        return await message.channel.send(TEXT.notif_playing_now.format(info["title"]))
+            # if the queue isn't empty
+            return await message.channel.send(embed=req.embed_queued)
+        else:
+            # now playing
+            return await message.channel.send(TEXT.notif_playing_now.format(req.info))
 
     async def join_handler(self, message):
         if message.author.voice is None:
             return await message.channel.send(TEXT.error_user_not_in_channel)
-        await self.ensure_voice(message.author.voice.channel)
+        await self.girumusic._join(message.author.voice.channel)
         await message.channel.send(
             TEXT.notif_joined.format(message.author.voice.channel)
         )
 
     async def disconnect_handler(self, message):
-        self.update_voice()
-        if self.voice is not None:
-            await self.voice.disconnect()
-            await message.channel.send(TEXT.notif_disconnected)
-        else:
-            await message.channel.send(TEXT.error_no_voice_channel)
+        if self.girumusic.voice is None:
+            return await message.channel.send(TEXT.error_no_voice_channel)
+        await self.girumusic._disconnect()
+        await message.channel.send(TEXT.notif_disconnected)
 
     async def pause_handler(self, message):
         if self.voice is None:

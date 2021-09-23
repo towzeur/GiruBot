@@ -43,7 +43,9 @@ class GiruClient(discord.Client):
 
     async def on_ready(self):
         debug("Logged on as", self.user)
-        await self.change_presence(status=discord.Status.idle, activity=self.game)
+        await self.change_presence(
+            status=discord.Status.online, activity=self.game, afk=False
+        )
 
     async def on_disconnect(self):
         pass
