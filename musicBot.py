@@ -59,6 +59,32 @@ DEFAULT_VOLUME = 0.5
 # ------------------------------------------------------------------------------
 
 
+class AudioSourceTracked(discord.AudioSource):
+    def __init__(self, source):
+        self._source = source
+        self.count = 0
+
+    def read(self) -> bytes:
+        data = self._source.read()
+        if data:
+            self.count += 1
+        return data
+
+    def is_opus(self) -> bool:
+        try:
+            return self._source.is_opus()
+        except:
+            return True
+
+    def cleanup(self):
+        self._source.cleanup()
+
+    @property
+    def progress(self) -> float:
+        # 20ms
+        return self.count * 0.02
+
+
 # ------------------------------------------------------------------------------
 
 
@@ -87,7 +113,9 @@ class GiruMusic:
         self.state = GiruState.IDLE
 
         self.voice: discord.VoiceClient = None
+
         self.looped_playback: bool = False
+        self.skip_flag: bool = False
 
     async def ensure_voice(self, channel):
         if self.voice is None:
@@ -116,12 +144,14 @@ class GiruMusic:
     @my_decorator
     def _play_after(self, e):
         print(e)
-        self.state = GiruState.IDLE
 
-        if not self.looped_playback:
-            if self.open:
-                req_ok = self.open.pop(0)
-                self.close.append(req_ok)
+        if self.open and (self.skip_flag or not self.looped_playback):
+            print("POGO PIGI")
+            self.close.append(self.open.pop(0))
+
+        # ensure to set this flag before calling consume
+        self.state = GiruState.IDLE
+        self.skip_flag = False
 
         coro = self.put(self._consume)
         fut = asyncio.run_coroutine_threadsafe(coro, self.client.loop)
@@ -154,35 +184,32 @@ class GiruMusic:
             before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",  # "-nostdin",
             options="-vn",
         )
-        # player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
-        self.voice.play(audio, after=self._play_after)
+        player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
+        player = AudioSourceTracked(player)
+        player.read()
+        self.voice.play(player, after=self._play_after)
 
     @my_decorator
     async def _consume(self):
-        if not self.open:
-            print("DEBUG", "nothing to consume")
-            return
-
-        req = self.open[0]
-        if self.state is GiruState.IDLE:
+        if self.open and self.state is GiruState.IDLE:
+            req = self.open[0]
             self.state = GiruState.PLAYING
             await self._play_now(req)
-            return await req.message.channel.send(
-                TEXT.notif_playing_now.format(req.title)
-            )
-        elif self.state is GiruState.PLAYING:
-            return await req.message.channel.send(
-                embed=req.create_embed_queued(
-                    estimated=1000, position=len(self.open) - 1
-                )
-            )
-        elif self.state is GiruState.PAUSED:
-            pass
+            await req.message.channel.send(TEXT.notif_playing_now.format(req.title))
+        else:
+            print("DEBUG", "nothing to consume")
 
     @my_decorator
     async def play(self, req):
         self.open.append(req)
         await self.put(self._consume)
+
+        if self.state is GiruState.PLAYING:
+            await req.message.channel.send(
+                embed=req.create_embed_queued(
+                    estimated=self.estimated, position=len(self.open) - 1
+                )
+            )
 
     @my_decorator
     def skip(self):
@@ -190,19 +217,30 @@ class GiruMusic:
         #    req_skip = self.open.pop(0)
         #    self.close.append(req_skip)
         self.voice.stop()
+        self.skip_flag = True
 
+    @my_decorator
     def stop(self):
-        pass
+        self.voice.stop()
 
+    @my_decorator
     def pause(self):
         pass
 
+    @my_decorator
     def resume(self):
         pass
 
+    @my_decorator
     def loop(self):
         self.looped_playback = not self.looped_playback
         return self.looped_playback
+
+    @property
+    def estimated(self):
+        t = self.open[0].duration - self.voice.source.progress
+        t += sum([req.duration for req in self.open[1:-1]])
+        return t
 
 
 # ------------------------------------------------------------------------------
@@ -259,27 +297,26 @@ class Request:
         # embed.set_author(*, name, url=Embed.Empty, icon_url=Embed.Empty)
         # print(self.info["thumbnail"])
         # embed.set_image(self.info["thumbnail"])
-        embed.add_field(name=self.title, value=f"[Click]({self.url})")
+        # embed.add_field(name=self.title, value=f"[Click]({self.url})")
 
         embed.set_thumbnail(url=self.info["thumbnail"])
 
+        # Markdown.bold(
         embed.add_field(
-            name=Markdown.bold("Channel"),
-            value=str(self.message.author.voice.channel),
-            inline=True,
+            name="Channel", value=str(self.message.author.voice.channel), inline=True,
         )
         embed.add_field(
-            name=Markdown.bold("Song Duration"),
+            name="Song Duration",
             value=convert_to_youtube_time_format(self.duration),
             inline=True,
         )
         embed.add_field(
-            name=Markdown.bold("Estimated time until playing"),
+            name="Estimated time until playing",
             value=convert_to_youtube_time_format(estimated),
             inline=True,
         )
         embed.add_field(
-            name=Markdown.bold("Position in queue"), value=position, inline=True,
+            name="Position in queue", value=position, inline=True,
         )
         return embed
 
