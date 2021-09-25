@@ -1,11 +1,11 @@
 GiruBot
 -------
 
-![Node build](https://github.com/eritislami/evobot/actions/workflows/node.yml/badge.svg)
-![Docker build](https://github.com/eritislami/evobot/actions/workflows/docker.yml/badge.svg)
-[![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
+[![GitHub stars](https://img.shields.io/github/stars/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/network)
 
 ![logo](https://repository-images.githubusercontent.com/409015826/e9959d0b-71d0-48aa-aaf0-41a846d7c48b)
+
 
 # GiruBot (Discord Music Bot)
 > GiruBot is a Discord Music Bot built with [discord.py](https://github.com/Rapptz/discord.py)
