@@ -1,45 +1,65 @@
+from os import stat
 import discord
 import random
-import asyncio
-import glob
-import os
 import json
 import time
 import re
+import glob
+from pathlib import Path
+from dataclasses import dataclass
 
-import text_en as TEXT
-from utils import loading_bar
+from utils import loading_bar, debug
+from options import LOCALE_DEFAULT, LOCALE_FILE_TEMPLATE
 from musicBot import GiruMusicBot
 
 
-def debug(*args, **kwargs):
-    t_format = "%H:%M:%S"
-    print(f"[{time.strftime(t_format)}]", *args, **kwargs)
+class Locale:
+    AVAILABLE = [
+        Path(file).stem for file in glob.glob(LOCALE_FILE_TEMPLATE.format("*"))
+    ]
+    CACHE = {}
+
+    def __init__(self, language=LOCALE_DEFAULT):
+        self.language = language
+        assert language in Locale.AVAILABLE
+        if language not in Locale.CACHE:
+            locale_filename = LOCALE_FILE_TEMPLATE.format(language)
+            with open(locale_filename, "r", encoding="utf8") as file:
+                Locale.CACHE[language] = json.load(file)
+
+    def __getattr__(self, attr):
+        return Locale.CACHE[self.language].get(attr, None)
 
 
-def youtube_url_validation(url):
-    youtube_regex = (
-        r"(https?://)?(www\.)?"
-        "(youtube|youtu|youtube-nocookie)\.(com|be)/"
-        "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})"
-    )
-    youtube_regex_match = re.match(youtube_regex, url)
-    return bool(youtube_regex_match)
+@dataclass
+class GiruInstance:
+    guild_id: int
+    locale: Locale
+    music: GiruMusicBot
+
+
+class GiruInstancesManager:
+    INSTANCES = {}
+
+    @staticmethod
+    def instanciate(guild_id):
+        # TODO : maybe check for the guild's fav locale in a database
+        giru_locale = Locale(language=LOCALE_DEFAULT)
+        giru_music = GiruMusicBot(guild_id, giru_locale)
+        instance = GiruInstance(guild_id, giru_locale, giru_music)
+        GiruInstancesManager.INSTANCES[guild_id] = instance
+
+    @staticmethod
+    def get(guild_id):
+        if guild_id not in GiruInstancesManager.INSTANCES:
+            GiruInstancesManager.instanciate(guild_id)
+        return GiruInstancesManager.INSTANCES[guild_id]
 
 
 class GiruClient(discord.Client):
     def __init__(self):
         super().__init__()
-        self.music_bots = {}
         self.game = discord.Game("Giru bot v2")
-
-    def get_music_bot(self, message):
-        # get the music bot or init it
-        music_bot = self.music_bots.get(message.guild.id, None)
-        if music_bot is None:
-            music_bot = GiruMusicBot(self, message.guild.id)
-            self.music_bots[message.guild.id] = music_bot
-        return music_bot
 
     async def on_ready(self):
         debug("Logged on as", self.user)
@@ -75,16 +95,16 @@ class GiruClient(discord.Client):
         # await message.channel.send(msg)
 
     async def on_member_join(self, member):
-        guild = member.guild
-        if guild.system_channel is not None:
-            to_send = "Welcome {0.mention} to {1.name}!".format(member, guild)
-            await guild.system_channel.send(to_send)
+        if member.guild.system_channel:
+            to_send = f"Welcome {member.mention} to {member.guild.name}!"
+            await member.guild.system_channel.send(to_send)
 
     async def on_message(self, message):
-
         # FILTER OWN SELF MESSAGE
         if message.author == self.user:
             return
+
+        instance = GiruInstancesManager.get(message.guild.id)
 
         # PRIVATE MESSAGE
         if type(message.channel) is discord.channel.DMChannel:
@@ -95,74 +115,37 @@ class GiruClient(discord.Client):
         if message.content.startswith("!p "):
             query = message.content[len("!p ") :].strip()
             debug("YOUTUBE (!p)", query)
-            music_bot = self.get_music_bot(message)
-            return await music_bot.play_handler(message, query)
+            return await instance.music.play_handler(message, query)
 
         # CONCERNED BY THIS MESSAGE
         prefix = "!"
         if message.content.startswith(prefix):
-            msg_args = message.content[len(prefix) :].split()
             # debug(str(msg_args))
+            msg_args = message.content[len(prefix) :].split()
 
-            music_bot = self.get_music_bot(message)
-
+            # rythm's music commands
             if msg_args[0] == "join":
-                return await music_bot.join_handler(message)
+                return await instance.music.join_handler(message)
             elif msg_args[0] == "disconnect":
-                return await music_bot.disconnect_handler(message)
+                return await instance.music.disconnect_handler(message)
             elif msg_args[0] == "pause":
-                return await music_bot.pause_handler(message)
+                return await instance.music.pause_handler(message)
             elif msg_args[0] == "resume":
-                return await music_bot.resume_handler(message)
+                return await instance.music.resume_handler(message)
             elif msg_args[0] == "skip":
-                return await music_bot.skip_handler(message)
+                return await instance.music.skip_handler(message)
             elif msg_args[0] == "loop":
-                return await music_bot.loop_handler(message)
+                return await instance.music.loop_handler(message)
 
+            # test
             if msg_args[0] == "hello":
                 return await message.channel.send("Hello {message.author.mention}")
             elif msg_args[0] == "ping":
                 return await message.channel.send("pong")
             elif msg_args[0] == "kamas":
                 return await message.channel.send(f"{random.randint(1, 10000)} Kamas")
-            elif msg_args[0] == "test":
-                embed = discord.Embed(
-                    title="Added to queue",
-                    description="**Title song**",
-                    color=0x0096CF,
-                    type="rich",
-                )
-                # embed.set_image(*, url)
-                embed.add_field(name="**Channel**", value="TEST GAME", inline=True)
-                embed.add_field(name="**Song Duration**", value="06:32", inline=True)
-                embed.add_field(
-                    name="**Estimated time until playing**", value="35:32", inline=False
-                )
-                embed.add_field(name="**Position in queue**", value="1", inline=True)
-                # debug(embed.to_dict())
-                await message.channel.send(embed=embed)
             else:
                 debug("!g ¯\_(ツ)_/¯")
-
-        """
-        elif message.content[3:] in [
-            "join",
-            "disconnect",
-            "pause",
-            "resume",
-            "skip",
-            "loop",
-        ]:
-            bot = self.get_music_bot(message.guild.id)
-            handler = getattr(bot, message.content[3:] + "_handler")
-            await handler(message)
-
-        elif message.content.startswith("!g ytb"):
-            bot = self.get_music_bot(message.guild.id)
-            query = message.content[len("!g ytb") :].strip()
-            await bot.play_handler(message, query, local=False, feedback=True)
-
-        """
 
 
 if __name__ == "__main__":
