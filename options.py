@@ -27,3 +27,9 @@ FFMPEG_OPTIONS = "-vn"
 # VOICE ------------------------------------------------------------------------
 
 DEFAULT_VOLUME = 0.5
+
+# LOCALE -----------------------------------------------------------------------
+
+LOCALE_DEFAULT = "en"
+
+LOCALE_FILE_TEMPLATE = "locales/{}.json"
