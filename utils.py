@@ -1,3 +1,17 @@
+from functools import wraps
+from threading import Lock, Thread
+import glob
+import json
+
+import re
+import time
+
+
+def debug(*args, **kwargs):
+    t_format = "%H:%M:%S"
+    print(f"[{time.strftime(t_format)}]", *args, **kwargs)
+
+
 def convert_to_youtube_time_format(total_seconds: float) -> str:
     m, s = divmod(int(total_seconds), 60)
     h, m = divmod(m, 60)
@@ -9,6 +23,16 @@ def convert_to_youtube_time_format(total_seconds: float) -> str:
     return "%02d:%02d:%02d" % (h, m, s)
 
     # return ["%02d" % x for x in (h, m, s)]
+
+
+def youtube_url_validation(url):
+    youtube_regex = (
+        r"(https?://)?(www\.)?"
+        "(youtube|youtu|youtube-nocookie)\.(com|be)/"
+        "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})"
+    )
+    youtube_regex_match = re.match(youtube_regex, url)
+    return bool(youtube_regex_match)
 
 
 def loading_bar(percent, length=10):
@@ -42,4 +66,29 @@ class Markdown:
     @staticmethod
     def bold(message):
         return "**" + message + "**"
+
+
+def log_called_function(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        print("@", f.__name__)
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
+class SingletonMeta(type):
+    """
+    Thread-safe implementation of Singleton from refactoring.guru
+    """
+
+    _instances = {}
+    _lock: Lock = Lock()
+
+    def __call__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[cls] = instance
+        return cls._instances[cls]
 
