@@ -4,7 +4,7 @@ GiruBot
 [![GitHub stars](https://img.shields.io/github/stars/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/network)
 
-![logo](https://repository-images.githubusercontent.com/409015826/e9959d0b-71d0-48aa-aaf0-41a846d7c48b)
+![logo](https://repository-images.githubusercontent.com/409015826/098691a5-ed8b-4387-8ec8-ec5b9aba0968)
 
 
 # GiruBot (Discord Music Bot)
@@ -49,7 +49,7 @@ Create a file `secrets.json` and fill out the values
 }
 ```
 
-## Features & Commands
+## 🗨 Features & Commands
 
 TODO
 
@@ -57,7 +57,7 @@ TODO
 
 Check out Contributing if you want to help add new languages !
 
-Create a json file in the [locales](https://github.com/eritislami/towzeur/tree/master/locales) directory named using the [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) two letter format.
+Create a json file in the [locales](https://github.com/towzeur/GiruBot/tree/master/locales) directory named using the [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) two letter format.
 
 List of currently available locales:
 - English (en)
@@ -79,7 +79,7 @@ inspire, and create. Any contributions you make are **greatly appreciated**.
 ## 🔑 License
 
 Distributed under the MIT License. 
-See [LICENSE](https://github.com/towzeur/gym-abalone/blob/master/LICENSE) for more information.
+See [LICENSE](https://github.com/towzeur/GiruBot/blob/master/LICENSE) for more information.
 
 ## ❤️ Credits
 
