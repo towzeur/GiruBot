@@ -1,60 +1,30 @@
-from re import S
-from urllib.request import Request
 import discord
 import asyncio
-from discord.channel import VoiceChannel
 import youtube_dl
+from re import S
 from enum import Enum
 from pprint import pprint
 from dataclasses import dataclass
-from collections.abc import Iterable
 from functools import partial
 
-import text_en as TEXT
+from options import (
+    YTDL_OPTIONS,
+    FFMPEG_BEFORE_OPTIONS,
+    FFMPEG_BEFORE_OPTIONS,
+    FFMPEG_EXECUTABLE,
+    FFMPEG_OPTIONS,
+    DEFAULT_VOLUME,
+)
 
-# from music_data_extractor import MusicFileWrapper
-from utils import convert_to_youtube_time_format, Markdown
+from utils import (
+    convert_to_youtube_time_format,
+    Markdown,
+    log_called_function,
+)
 
 
-# Fuck your useless bugreports message that gets two link embeds and confuses users
 youtube_dl.utils.bug_reports_message = lambda: ""
 
-
-from functools import wraps
-
-
-def my_decorator(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        print("@", f.__name__)
-        return f(*args, **kwargs)
-
-    return wrapper
-
-
-# ------------------------------------------------------------------------------
-
-YDL_OPTIONS = {
-    "verbose": False,
-    "format": "bestaudio/best",
-    "outtmpl": "%(extractor)s-%(id)s-%(title)s.%(ext)s",
-    "restrictfilenames": True,
-    "noplaylist": True,
-    "nocheckcertificate": True,
-    "ignoreerrors": False,
-    "logtostderr": False,
-    "quiet": True,
-    "no_warnings": True,
-    "default_search": "ytsearch",  # "auto"
-    "source_address": "0.0.0.0",  # bind to ipv4 since ipv6 addresses cause issues sometimes
-    "usenetrc": True,
-}
-
-
-ytdl_before_args = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
-
-
-DEFAULT_VOLUME = 0.5
 
 # ------------------------------------------------------------------------------
 
@@ -105,8 +75,9 @@ class GiruState(Enum):
 
 
 class GiruMusic:
-    def __init__(self, client):
-        self.client = client
+    def __init__(self, event_loop, locale):
+        self.event_loop = event_loop
+        self.locale = locale
 
         self.q = asyncio.Queue()
         self.open, self.close = [], []
@@ -131,87 +102,86 @@ class GiruMusic:
             while True:
                 callback = await self.q.get()
                 await callback()
-                # if isinstance(tmp, Iterable):
-                #    handler, args = tmp[0], tmp[1:]
-                #    await handler(*args)
-                # else:
-                #    await tmp()
         except Exception as e:  #  asyncio.CancelledError
             print("[run] Exception", e)
         finally:
             print("[run] finally")
 
-    @my_decorator
+    @log_called_function
     def _play_after(self, e):
         print(e)
 
+        # should the current head (1st position in open list) closed ?
         if self.open and (self.skip_flag or not self.looped_playback):
             print("POGO PIGI")
             self.close.append(self.open.pop(0))
 
-        # ensure to set this flag before calling consume
+        # ensure to set this flag BEFORE calling consume
         self.state = GiruState.IDLE
         self.skip_flag = False
 
+        # call the callback like that because _play_after can't be defined as
+        # a coroutines
         coro = self.put(self._consume)
-        fut = asyncio.run_coroutine_threadsafe(coro, self.client.loop)
-        # client.loop)
+        fut = asyncio.run_coroutine_threadsafe(coro, self.event_loop)
         try:
             fut.result()
         except:
             pass
 
-    @my_decorator
+    @log_called_function
     async def _join(self, channel):
         await self.ensure_voice(channel)
 
-    @my_decorator
+    @log_called_function
     async def _disconnect(self):
         if self.voice:
             await self.voice.disconnect()
 
-    @my_decorator
+    @log_called_function
     async def _play_now(self, req):
         await self._join(req.message.author.voice.channel)
-        # audio = discord.FFmpegPCMAudio(req.url, executable="ffmpeg.exe")
-        # before_options="-nostdin"
-        # , stderr=subprocess.PIPE
+
         audio = discord.FFmpegPCMAudio(
             req.url,
-            executable="ffmpeg",
+            executable=FFMPEG_EXECUTABLE,
             pipe=False,
-            stderr=None,
-            before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",  # "-nostdin",
-            options="-vn",
+            stderr=None,  # subprocess.PIPE
+            before_options=FFMPEG_BEFORE_OPTIONS,  # "-nostdin",
+            options=FFMPEG_OPTIONS,
         )
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()
         self.voice.play(player, after=self._play_after)
 
-    @my_decorator
+    @log_called_function
     async def _consume(self):
         if self.open and self.state is GiruState.IDLE:
             req = self.open[0]
             self.state = GiruState.PLAYING
             await self._play_now(req)
-            await req.message.channel.send(TEXT.notif_playing_now.format(req.title))
+
         else:
             print("DEBUG", "nothing to consume")
 
-    @my_decorator
+    @log_called_function
     async def play(self, req):
         self.open.append(req)
         await self.put(self._consume)
 
-        if self.state is GiruState.PLAYING:
+        if self.state is GiruState.IDLE:
+            await req.message.channel.send(
+                self.locale.notif_playing_now.format(req.title)
+            )
+        elif self.state is GiruState.PLAYING:
             await req.message.channel.send(
                 embed=req.create_embed_queued(
                     estimated=self.estimated, position=len(self.open) - 1
                 )
             )
 
-    @my_decorator
+    @log_called_function
     def skip(self):
         # if self.open:
         #    req_skip = self.open.pop(0)
@@ -219,19 +189,19 @@ class GiruMusic:
         self.voice.stop()
         self.skip_flag = True
 
-    @my_decorator
+    @log_called_function
     def stop(self):
         self.voice.stop()
 
-    @my_decorator
+    @log_called_function
     def pause(self):
         pass
 
-    @my_decorator
+    @log_called_function
     def resume(self):
         pass
 
-    @my_decorator
+    @log_called_function
     def loop(self):
         self.looped_playback = not self.looped_playback
         return self.looped_playback
@@ -257,14 +227,14 @@ class Request:
     url: str
     duration: float
 
-    ytdl = youtube_dl.YoutubeDL(YDL_OPTIONS)
+    ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
 
     @classmethod
     async def from_youtube(cls, query, message):
-        # with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+        # with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ydl:
         #    info = ydl.extract_info(query, download=False)
 
-        # ytdl = youtube_dl.YoutubeDL(YDL_OPTIONS)
+        # ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
         loop = asyncio.get_event_loop()
         downloader = partial(cls.ytdl.extract_info, query, download=False)
         # , process=False)
@@ -325,77 +295,78 @@ class Request:
 
 
 class GiruMusicBot:
-    def __init__(self, client, server_id):
-        self.client = client
-        self.server_id = server_id
+    def __init__(self, guild_id, locale):
+        self.guild_id = guild_id
+        self.locale = locale
 
-        self.girumusic = GiruMusic(self.client)
-        self.client.loop.create_task(self.girumusic.run())
+        self.loop = asyncio.get_running_loop()  # client.loop
+        self.girumusic = GiruMusic(self.loop, self.locale)
+        self.loop.create_task(self.girumusic.run())
 
     ########################
 
     async def play_handler(self, message, query):
         # user have to be in a voice channel
         if message.author.voice is None:
-            return await message.channel.send(TEXT.error_user_not_in_channel)
+            return await message.channel.send(self.locale.error_user_not_in_channel)
 
         # searching for the given query
-        await message.channel.send(TEXT.notif_loop_searching.format(query))
+        await message.channel.send(self.locale.notif_loop_searching.format(query))
         req = await Request.from_youtube(query, message)
 
         if req is None:
-            return await message.channel.send(TEXT.error_no_matches)
+            return await message.channel.send(self.locale.error_no_matches)
 
         # play the song
         await self.girumusic.put(self.girumusic.play, req)
 
     async def join_handler(self, message):
         if message.author.voice is None:
-            return await message.channel.send(TEXT.error_user_not_in_channel)
+            return await message.channel.send(self.locale.error_user_not_in_channel)
         await self.girumusic._join(message.author.voice.channel)
         await message.channel.send(
-            TEXT.notif_joined.format(message.author.voice.channel)
+            self.locale.notif_joined.format(message.author.voice.channel)
         )
 
     async def disconnect_handler(self, message):
         if self.girumusic.voice is None:
-            return await message.channel.send(TEXT.error_no_voice_channel)
+            return await message.channel.send(self.locale.error_no_voice_channel)
         await self.girumusic._disconnect()
-        await message.channel.send(TEXT.notif_disconnected)
+        await message.channel.send(self.locale.notif_disconnected)
 
     async def pause_handler(self, message):
         if self.girumusic.voice is None:
-            await message.channel.send(TEXT.error_no_voice_channel)
+            await message.channel.send(self.locale.error_no_voice_channel)
 
         if not self.voice.is_paused():
             self.voice.pause()
             self.event.set()
-            return await message.channel.send(TEXT.notif_paused)
+            return await message.channel.send(self.locale.notif_paused)
 
-        return await message.channel.send(TEXT.error_already_paused)
+        return await message.channel.send(self.locale.error_already_paused)
 
     async def resume_handler(self, message):
         if self.girumusic.voice is None:
-            return await message.channel.send(TEXT.error_no_voice_channel)
+            return await message.channel.send(self.locale.error_no_voice_channel)
 
         if self.voice.is_paused():
             self.voice.resume()
-            return await message.channel.send(TEXT.notif_resumed)
+            return await message.channel.send(self.locale.notif_resumed)
 
-        return await message.channel.send(TEXT.error_not_paused)
+        return await message.channel.send(self.locale.error_not_paused)
 
     async def skip_handler(self, message):
         if self.girumusic.voice is None:
-            return await message.channel.send(TEXT.error_no_voice_channel)
+            return await message.channel.send(self.locale.error_no_voice_channel)
 
         if self.girumusic.state is GiruState.PLAYING:
             self.girumusic.skip()
-            return await message.channel.send(TEXT.notif_skipped)
+            return await message.channel.send(self.locale.notif_skipped)
 
-        return await message.channel.send(TEXT.error_nothing_playing)
+        return await message.channel.send(self.locale.error_nothing_playing)
 
     async def loop_handler(self, message):
         if self.girumusic.loop():
-            return await message.channel.send(TEXT.notif_loop_enabled)
-        return await message.channel.send(TEXT.notif_loop_disabled)
+            return await message.channel.send(self.locale.notif_loop_enabled)
+        return await message.channel.send(self.locale.notif_loop_disabled)
 
