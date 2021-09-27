@@ -13,10 +13,15 @@ jobs:
         working-directory: ${{github.workspace}}
         shell: bash
         run: |
-          grep -c '\- \[X\]' README.md
+          echo "COUNT_CHECKED=$(grep -c '\- \[X\]' README.md)" >> $GITHUB_ENV
 
       - name: count-total
         working-directory: ${{github.workspace}}
         shell: bash
         run: |
-          grep -c '\- \[[ X]\]' README.md
+          echo "COUNT_TOTAL=$(grep -c '\- \[[ X]\]' README.md)" >> $GITHUB_ENV
+
+      - name: print stats
+        working-directory: ${{github.workspace}}
+        shell: bash
+        run: echo "${{ env.COUNT_CHECKED }} / ${{ env.COUNT_TOTAL }}"
