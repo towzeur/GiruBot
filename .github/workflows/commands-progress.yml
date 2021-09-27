@@ -25,3 +25,13 @@ jobs:
         working-directory: ${{github.workspace}}
         shell: bash
         run: echo "${{ env.COUNT_CHECKED }} / ${{ env.COUNT_TOTAL }}"
+
+      - name: Create the Badge
+        uses: schneegans/dynamic-badges-action@v1.1.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: f27f7d37daec880cd3927e0d812d9791
+          filename: giru_badges.json
+          label: Implementation progress
+          message: "${{ env.COUNT_CHECKED }} / ${{ env.COUNT_TOTAL }}"
+          color: green
