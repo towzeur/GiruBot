@@ -9,6 +9,18 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: print-working-dir
+        working-directory: ${{runner.workspace}}
+        shell: bash
+        run: |
+          pwd
+
+      - name: ls
+        working-directory: ${{runner.workspace}}
+        shell: bash
+        run: |
+          ls
+
       - name: count-checked
         working-directory: ${{runner.workspace}}
         shell: bash
