@@ -3,6 +3,7 @@ GiruBot
 
 [![GitHub stars](https://img.shields.io/github/stars/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/network)
+![badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/towzeur/f27f7d37daec880cd3927e0d812d9791/raw/giru_badges.json)
 
 ![logo](https://repository-images.githubusercontent.com/409015826/098691a5-ed8b-4387-8ec8-ec5b9aba0968)
 
@@ -51,7 +52,64 @@ Create a file `secrets.json` and fill out the values
 
 ## 🗨 Features & Commands
 
-TODO
+Song
+- [X] **`join`**
+- [X] **`play`**
+- [ ] **`playtop`**
+- [ ] **`playskip`**
+- [ ] **`search`**
+- [ ] **`soundcloud`**
+- [X] **`nowplaying`**
+- [ ] **`grab`**
+- [ ] **`seek`**
+- [ ] **`rewind`**
+- [ ] **`forward`**
+- [ ] **`replay`**
+- [X] **`loop`**
+- [ ] **`voteskip`**
+- [ ] **`forceskip`**
+- [X] **`pause`**
+- [X] **`resume`**
+- [ ] **`lyrics`**
+- [X] **`disconnect`**
+
+Queue
+- [ ] **`queue`**
+- [ ] **`loopqueue`**
+- [ ] **`move`**
+- [ ] **`skipto`**
+- [ ] **`shuffle`**
+- [ ] **`remove`**
+- [ ] **`clear`**
+- [ ] **`leavecleanup`**
+- [ ] **`removedupes`**
+
+koodos
+- [ ] **`sotd`**
+- [ ] **`playsotd`**
+- [ ] **`sotw`**
+- [ ] **`playsotw`**
+- [ ] **`sotm`**
+- [ ] **`playsotm`**
+
+Settings
+- [ ] **`settings`**
+
+Premium
+- [ ] **`effects`**
+- [ ] **`speed`**
+- [ ] **`bass`**
+- [ ] **`nightcore`**
+- [ ] **`slowed`**
+- [ ] **`volume`**
+
+Others
+- [ ] **`prune`**
+- [ ] **`invite`**
+- [ ] **`info`**
+- [ ] **`shard`**
+- [ ] **`ping`**
+- [ ] **`aliases`**
 
 ## 🌎 Language
 

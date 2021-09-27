@@ -1,0 +1,37 @@
+name: commands-progress
+
+# Triggers the workflow on push or pull request events
+on: [push, pull_request]
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: count-checked
+        working-directory: ${{github.workspace}}
+        shell: bash
+        run: |
+          echo "COUNT_CHECKED=$(grep -c '\- \[X\]' README.md)" >> $GITHUB_ENV
+
+      - name: count-total
+        working-directory: ${{github.workspace}}
+        shell: bash
+        run: |
+          echo "COUNT_TOTAL=$(grep -c '\- \[[ X]\]' README.md)" >> $GITHUB_ENV
+
+      - name: print stats
+        working-directory: ${{github.workspace}}
+        shell: bash
+        run: echo "${{ env.COUNT_CHECKED }} / ${{ env.COUNT_TOTAL }}"
+
+      - name: Create the Badge
+        uses: schneegans/dynamic-badges-action@v1.1.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: f27f7d37daec880cd3927e0d812d9791
+          filename: giru_badges.json
+          label: Implementation progress
+          message: "${{ env.COUNT_CHECKED }} / ${{ env.COUNT_TOTAL }}"
+          color: green
