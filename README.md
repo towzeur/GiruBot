@@ -3,6 +3,7 @@ GiruBot
 
 [![GitHub stars](https://img.shields.io/github/stars/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/towzeur/GiruBot.svg)](https://github.com/towzeur/GiruBot/network)
+![badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/towzeur/f27f7d37daec880cd3927e0d812d9791/raw/giru_badges.json)
 
 ![logo](https://repository-images.githubusercontent.com/409015826/098691a5-ed8b-4387-8ec8-ec5b9aba0968)
 
