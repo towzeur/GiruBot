@@ -51,7 +51,64 @@ Create a file `secrets.json` and fill out the values
 
 ## 🗨 Features & Commands
 
-TODO
+Song
+- [ ] **`join`**
+- [ ] **`play`**
+- [ ] **`playtop`**
+- [ ] **`playskip`**
+- [ ] **`search`**
+- [ ] **`soundcloud`**
+- [ ] **`nowplaying`**
+- [ ] **`grab`**
+- [ ] **`seek`**
+- [ ] **`rewind`**
+- [ ] **`forward`**
+- [ ] **`replay`**
+- [ ] **`loop`**
+- [ ] **`voteskip`**
+- [ ] **`forceskip`**
+- [ ] **`pause`**
+- [ ] **`resume`**
+- [ ] **`lyrics`**
+- [ ] **`disconnect`**
+
+Queue
+- [ ] **`queue`**
+- [ ] **`loopqueue`**
+- [ ] **`move`**
+- [ ] **`skipto`**
+- [ ] **`shuffle`**
+- [ ] **`remove`**
+- [ ] **`clear`**
+- [ ] **`leavecleanup`**
+- [ ] **`removedupes`**
+
+koodos
+- [ ] **`sotd`**
+- [ ] **`playsotd`**
+- [ ] **`sotw`**
+- [ ] **`playsotw`**
+- [ ] **`sotm`**
+- [ ] **`playsotm`**
+
+Settings
+- [ ] **`settings`**
+
+Premium
+- [ ] **`effects`**
+- [ ] **`speed`**
+- [ ] **`bass`**
+- [ ] **`nightcore`**
+- [ ] **`slowed`**
+- [ ] **`volume`**
+
+Others
+- [ ] **`prune`**
+- [ ] **`invite`**
+- [ ] **`info`**
+- [ ] **`shard`**
+- [ ] **`ping`**
+- [ ] **`aliases`**
 
 ## 🌎 Language
 
