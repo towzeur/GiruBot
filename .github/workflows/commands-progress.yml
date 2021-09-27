@@ -14,8 +14,8 @@ jobs:
         shell: bash
         run: |
           grep -c '\- \[ \]' README.md
-  
-    - name: count-total
+
+      - name: count-total
         working-directory: ${{runner.workspace}}
         shell: bash
         run: |
