@@ -124,18 +124,18 @@ class GiruClient(discord.Client):
             msg_args = message.content[len(prefix) :].split()
 
             # rythm's music commands
-            if msg_args[0] == "join":
-                return await instance.music.join_handler(message)
-            elif msg_args[0] == "disconnect":
-                return await instance.music.disconnect_handler(message)
-            elif msg_args[0] == "pause":
-                return await instance.music.pause_handler(message)
-            elif msg_args[0] == "resume":
-                return await instance.music.resume_handler(message)
-            elif msg_args[0] == "skip":
-                return await instance.music.skip_handler(message)
-            elif msg_args[0] == "loop":
-                return await instance.music.loop_handler(message)
+            if msg_args[0] in (
+                "join",
+                "disconnect",
+                "pause",
+                "resume",
+                "skip",
+                "loop",
+                "np",
+                "replay",
+            ):
+                handler = getattr(instance.music, f"{msg_args[0]}_handler")
+                return await handler(message)
 
             # test
             if msg_args[0] == "hello":

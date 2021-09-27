@@ -85,8 +85,9 @@ class GiruMusic:
 
         self.voice: discord.VoiceClient = None
 
-        self.looped_playback: bool = False
-        self.skip_flag: bool = False
+        self.flag_loop: bool = False
+        self.flag_skip: bool = False
+        self.flag_replay: bool = False
 
     async def ensure_voice(self, channel):
         if self.voice is None:
@@ -112,16 +113,29 @@ class GiruMusic:
         print(e)
 
         # should the current head (1st position in open list) closed ?
-        if self.open and (self.skip_flag or not self.looped_playback):
-            print("POGO PIGI")
-            self.close.append(self.open.pop(0))
+        if self.flag_skip:
+            skip = True
+        elif self.flag_replay:
+            skip = False
+        elif self.flag_loop:  # lower priority
+            skip = False
+        else:
+            skip = True
+
+        # skip if needed
+        if skip:
+            try:
+                print("_play_after: closed")
+                self.close.append(self.open.pop(0))
+            except IndexError as e:
+                print()
 
         # ensure to set this flag BEFORE calling consume
         self.state = GiruState.IDLE
-        self.skip_flag = False
+        self.flag_skip = False
+        self.flag_replay = False
 
-        # call the callback like that because _play_after can't be defined as
-        # a coroutines
+        # _play_after can't be defined as a coroutine
         coro = self.put(self._consume)
         fut = asyncio.run_coroutine_threadsafe(coro, self.event_loop)
         try:
@@ -141,7 +155,6 @@ class GiruMusic:
     @log_called_function
     async def _play_now(self, req):
         await self._join(req.message.author.voice.channel)
-
         audio = discord.FFmpegPCMAudio(
             req.url,
             executable=FFMPEG_EXECUTABLE,
@@ -182,14 +195,6 @@ class GiruMusic:
             )
 
     @log_called_function
-    def skip(self):
-        # if self.open:
-        #    req_skip = self.open.pop(0)
-        #    self.close.append(req_skip)
-        self.voice.stop()
-        self.skip_flag = True
-
-    @log_called_function
     def stop(self):
         self.voice.stop()
 
@@ -202,13 +207,25 @@ class GiruMusic:
         pass
 
     @log_called_function
+    def skip(self):
+        self.flag_skip = True
+        self.voice.stop()
+
+    @log_called_function
     def loop(self):
-        self.looped_playback = not self.looped_playback
-        return self.looped_playback
+        self.flag_loop = not self.flag_loop
+        return self.flag_loop
+
+    @log_called_function
+    def replay(self):
+        self.flag_replay = True
+        self.voice.stop()
 
     @property
     def estimated(self):
+        # remaining of the current track
         t = self.open[0].duration - self.voice.source.progress
+        # remaining of total queue
         t += sum([req.duration for req in self.open[1:-1]])
         return t
 
@@ -290,6 +307,37 @@ class Request:
         )
         return embed
 
+    def create_embed_np(self, t, ticks=30):
+        x = int(ticks * (t / self.duration))
+        print(t, self.duration, x, "%")
+
+        embed = discord.Embed(
+            title=self.title,
+            url=self.url,
+            # description=Markdown.bold(self.title),
+            color=0x00AFF4,
+        )
+        embed.set_thumbnail(url=self.info["thumbnail"])
+        embed.set_author(name="Now Playing ♪")
+        # "ㅤ"
+        # progress bar
+        line = "".join(["▬" if t != x else "🔘" for t in range(ticks)])
+        embed.add_field(
+            name="\rx", value=Markdown.code(line) + "\n\u200b", inline=False,
+        )
+        # 5:26 / 16:26
+        d_current = convert_to_youtube_time_format(t)
+        d_end = convert_to_youtube_time_format(self.duration)
+        line = f"{d_current} / {d_end}"
+        embed.add_field(
+            name="\rx", value=Markdown.code(line) + "\n\u200b", inline=False,
+        )
+        # Requested by
+        line = f"`Requested by:` {self.message.author.name}"
+        embed.add_field(name="\rx", value=line, inline=False)
+        # return "\u200B"
+        return embed
+
 
 # ------------------------------------------------------------------------------
 
@@ -369,4 +417,21 @@ class GiruMusicBot:
         if self.girumusic.loop():
             return await message.channel.send(self.locale.notif_loop_enabled)
         return await message.channel.send(self.locale.notif_loop_disabled)
+
+    async def np_handler(self, message):
+        if self.girumusic.voice is None:
+            return await message.channel.send(self.locale.error_no_voice_channel)
+
+        if self.girumusic.state is GiruState.PLAYING:
+            t = self.girumusic.voice.source.progress
+            embed = self.girumusic.open[0].create_embed_np(t)
+            return await message.channel.send(embed=embed)
+
+    @log_called_function
+    async def replay_handler(self, message):
+        if self.girumusic.voice is None:
+            return await message.channel.send(self.locale.error_no_voice_channel)
+
+        if self.girumusic.state is GiruState.PLAYING:
+            self.girumusic.replay()
 
