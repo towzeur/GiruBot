@@ -52,25 +52,25 @@ Create a file `secrets.json` and fill out the values
 ## 🗨 Features & Commands
 
 Song
-- [ ] **`join`**
-- [ ] **`play`**
+- [X] **`join`**
+- [X] **`play`**
 - [ ] **`playtop`**
 - [ ] **`playskip`**
 - [ ] **`search`**
 - [ ] **`soundcloud`**
-- [ ] **`nowplaying`**
+- [X] **`nowplaying`**
 - [ ] **`grab`**
 - [ ] **`seek`**
 - [ ] **`rewind`**
 - [ ] **`forward`**
 - [ ] **`replay`**
-- [ ] **`loop`**
+- [X] **`loop`**
 - [ ] **`voteskip`**
 - [ ] **`forceskip`**
-- [ ] **`pause`**
-- [ ] **`resume`**
+- [X] **`pause`**
+- [X] **`resume`**
 - [ ] **`lyrics`**
-- [ ] **`disconnect`**
+- [X] **`disconnect`**
 
 Queue
 - [ ] **`queue`**
