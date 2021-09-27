@@ -9,23 +9,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: print-working-dir
-        working-directory: ${{github.workspace}}
-        shell: bash
-        run: |
-          pwd
-
-      - name: ls
-        working-directory: ${{github.workspace}}
-        shell: bash
-        run: |
-          ls
-
       - name: count-checked
         working-directory: ${{github.workspace}}
         shell: bash
         run: |
-          grep -c '\- \[ \]' README.md
+          grep -c '\- \[X\]' README.md
 
       - name: count-total
         working-directory: ${{github.workspace}}
