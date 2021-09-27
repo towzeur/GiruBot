@@ -52,67 +52,6 @@ Create a file `secrets.json` and fill out the values
 
 ## 🗨 Features & Commands
 
-<<<<<<< HEAD
-
-Song
-- [X] `join`
-- [X] `play`
-- [ ] `playtop`
-- [ ] `playskip`
-- [ ] `search`
-- [ ] `soundcloud`
-- [X] `nowplaying`
-- [ ] `grab`
-- [ ] `seek`
-- [ ] `rewind`
-- [ ] `forward`
-- [X] `replay`
-- [X] `loop`
-- [ ] `voteskip`
-- [ ] `forceskip`
-- [X] `pause`
-- [X] `resume`
-- [ ] `lyrics`
-- [X] `disconnect`
-
-Queue
-- [ ] `queue`
-- [ ] `loopqueue`
-- [ ] `move`
-- [ ] `skipto`
-- [ ] `shuffle`
-- [ ] `remove`
-- [ ] `clear`
-- [ ] `leavecleanup`
-- [ ] `removedupes`
-
-koodos
-- [ ] `sotd`
-- [ ] `playsotd`
-- [ ] `sotw`
-- [ ] `playsotw`
-- [ ] `sotm`
-- [ ] `playsotm`
-
-Settings
-- [ ] `settings`
-
-Premium
-- [ ] `effects`
-- [ ] `speed`
-- [ ] `bass`
-- [ ] `nightcore`
-- [ ] `slowed`
-- [ ] `volume`
-
-Others
-- [ ] `prune`
-- [ ] `invite`
-- [ ] `info`
-- [ ] `shard`
-- [ ] `ping`
-- [ ] `aliases`
-=======
 Song
 - [X] **`join`**
 - [X] **`play`**
@@ -125,7 +64,7 @@ Song
 - [ ] **`seek`**
 - [ ] **`rewind`**
 - [ ] **`forward`**
-- [ ] **`replay`**
+- [X] **`replay`**
 - [X] **`loop`**
 - [ ] **`voteskip`**
 - [ ] **`forceskip`**
@@ -171,7 +110,6 @@ Others
 - [ ] **`shard`**
 - [ ] **`ping`**
 - [ ] **`aliases`**
->>>>>>> d0ca25ae5ce77e2fc16e92546142a284c35ee347
 
 ## 🌎 Language
 
