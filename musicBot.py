@@ -200,11 +200,11 @@ class GiruMusic:
 
     @log_called_function
     def pause(self):
-        pass
+        self.voice.pause()
 
     @log_called_function
     def resume(self):
-        pass
+        self.voice.resume()
 
     @log_called_function
     def skip(self):
@@ -386,9 +386,8 @@ class GiruMusicBot:
         if self.girumusic.voice is None:
             await message.channel.send(self.locale.error_no_voice_channel)
 
-        if not self.voice.is_paused():
-            self.voice.pause()
-            self.event.set()
+        if self.girumusic.voice.is_playing():
+            self.girumusic.pause()
             return await message.channel.send(self.locale.notif_paused)
 
         return await message.channel.send(self.locale.error_already_paused)
@@ -397,11 +396,11 @@ class GiruMusicBot:
         if self.girumusic.voice is None:
             return await message.channel.send(self.locale.error_no_voice_channel)
 
-        if self.voice.is_paused():
-            self.voice.resume()
+        if self.girumusic.voice.is_paused():
+            self.girumusic.resume()
             return await message.channel.send(self.locale.notif_resumed)
-
-        return await message.channel.send(self.locale.error_not_paused)
+        else:
+            return await message.channel.send(self.locale.error_not_paused)
 
     async def skip_handler(self, message):
         if self.girumusic.voice is None:
@@ -410,8 +409,8 @@ class GiruMusicBot:
         if self.girumusic.state is GiruState.PLAYING:
             self.girumusic.skip()
             return await message.channel.send(self.locale.notif_skipped)
-
-        return await message.channel.send(self.locale.error_nothing_playing)
+        else:
+            return await message.channel.send(self.locale.error_nothing_playing)
 
     async def loop_handler(self, message):
         if self.girumusic.loop():

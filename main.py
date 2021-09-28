@@ -1,10 +1,10 @@
-from os import stat
 import discord
 import random
 import json
 import time
 import re
 import glob
+from os import stat
 from pathlib import Path
 from dataclasses import dataclass
 

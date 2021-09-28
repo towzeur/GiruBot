@@ -67,6 +67,10 @@ class Markdown:
     def bold(message):
         return "**" + message + "**"
 
+    @staticmethod
+    def code(message):
+        return "`" + message + "`"
+
 
 def log_called_function(f):
     @wraps(f)
