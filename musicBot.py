@@ -179,8 +179,11 @@ class GiruMusic:
             print("DEBUG", "nothing to consume")
 
     @log_called_function
-    async def play(self, req):
-        self.open.append(req)
+    async def play(self, req, top=False):
+        if top:
+            self.open.insert(1, req)  # play top
+        else:
+            self.open.append(req)
         await self.put(self._consume)
 
         if self.state is GiruState.IDLE:
@@ -190,9 +193,13 @@ class GiruMusic:
         elif self.state is GiruState.PLAYING:
             await req.message.channel.send(
                 embed=req.create_embed_queued(
-                    estimated=self.estimated, position=len(self.open) - 1
+                    estimated=self.estimated, position=len(self.open[1:])
                 )
             )
+
+    @log_called_function
+    async def playtop(self, req):
+        await self.play(req, top=True)
 
     @log_called_function
     def stop(self):
@@ -353,7 +360,9 @@ class GiruMusicBot:
 
     ########################
 
-    async def play_handler(self, message, query):
+    ########################
+
+    async def play_handler(self, message, query, top=False):
         # user have to be in a voice channel
         if message.author.voice is None:
             return await message.channel.send(self.locale.error_user_not_in_channel)
@@ -366,7 +375,10 @@ class GiruMusicBot:
             return await message.channel.send(self.locale.error_no_matches)
 
         # play the song
-        await self.girumusic.put(self.girumusic.play, req)
+        if top:
+            await self.girumusic.put(self.girumusic.play, req)
+        else:
+            await self.girumusic.put(self.girumusic.playtop, req)
 
     async def join_handler(self, message):
         if message.author.voice is None:
