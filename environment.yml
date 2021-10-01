@@ -1,0 +1,9 @@
+name: giru
+channels:
+  - defaults
+dependencies:
+  - pip
+  - pytz
+  - numpy
+  - black
+  - ipykernel
