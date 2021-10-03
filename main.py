@@ -15,31 +15,6 @@ from music import Music
 from locales import Locales
 
 
-@dataclass
-class GiruInstance:
-    guild_id: int
-    locale: Locales
-    music: Music
-
-
-class GiruInstancesManager:
-    INSTANCES = {}
-
-    @staticmethod
-    def instanciate(guild_id):
-        # TODO : maybe check for the guild's fav locale in a database
-        giru_locale = Locales(language=LOCALE_DEFAULT)
-        giru_music = Music(guild_id, giru_locale)
-        instance = GiruInstance(guild_id, giru_locale, giru_music)
-        GiruInstancesManager.INSTANCES[guild_id] = instance
-
-    @staticmethod
-    def get(guild_id):
-        if guild_id not in GiruInstancesManager.INSTANCES:
-            GiruInstancesManager.instanciate(guild_id)
-        return GiruInstancesManager.INSTANCES[guild_id]
-
-
 class Giru(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

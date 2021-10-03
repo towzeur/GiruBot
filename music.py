@@ -422,12 +422,20 @@ class Player:
             await self.voice.disconnect()
 
     @log_called_function
-    async def skip(self):
+    async def skip(self) -> bool:
         skiped = self.voice and self.state is GiruState.PLAYING
         if skiped:
             self.flag = PlayerFlag.SKIP
             self.voice.stop()
         return skiped
+
+    @log_called_function
+    async def loop(self) -> bool:
+        if self.option is PlayerOption.LOOP:
+            self.option = None
+        else:
+            self.option = PlayerOption.LOOP
+        return self.option is PlayerOption.LOOP
 
 
 # ------------------------------------------------------------------------------
@@ -536,8 +544,17 @@ class Music(commands.Cog):
         await ctx.send("NotImplementedError")
 
     @commands.command(aliases=["repeat"])
+    @commands.guild_only()
+    @commands.check(Check.same_channel)
     async def loop(self, ctx):
-        await ctx.send("NotImplementedError")
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        looped = await player.loop()
+        if looped:
+            await locale.send(ctx, "notif_loop_enabled")
+        else:
+            await locale.send(ctx, "notif_loop_disabled")
 
     @commands.command(aliases=["skip", "next", "s"])
     @commands.guild_only()
