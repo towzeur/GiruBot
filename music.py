@@ -423,9 +423,11 @@ class Player:
 
     @log_called_function
     async def skip(self):
-        if self.voice:
-            self.flag = PlayerFlag.
+        skiped = self.voice and self.state is GiruState.PLAYING
+        if skiped:
+            self.flag = PlayerFlag.SKIP
             self.voice.stop()
+        return skiped
 
 
 # ------------------------------------------------------------------------------
@@ -545,7 +547,7 @@ class Music(commands.Cog):
         player = self.get_guild_music(ctx.guild.id)
         locale = ctx.bot.get_cog("Locales")
 
-        skiped = player.skip()
+        skiped = await player.skip()
         if skiped:
             await locale.send(ctx, "notif_skipped")
         else:
