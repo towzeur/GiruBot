@@ -218,31 +218,58 @@ class Request:
 # ------------------------------------------------------------------------------
 
 
-class GiruState(Enum):
-    UNKNOWN = 1
-    IDLE = 2
-    PLAYING = 3
-    PAUSED = 4
+class PlayerFlag(Enum):
+    SKIP = 1
+    REPLAY = 2
+
+
+class PlayerOption(Enum):
+    LOOP = 1
+    LOOP_QUEUE = 2
 
 
 class PlayerQueue:
     def __init__(self):
         self.close, self.open = [], []
+        self.cursor = 0
 
     def __len__(self):
         return len(self.open)
 
+    def next(self, flag: PlayerFlag = None, option: PlayerOption = None):
+        # flags have a higher priority
+        if flag is PlayerFlag.SKIP:
+            self.dequeue(idx=self.cursor)
+            return self.current
+        elif flag is PlayerFlag.REPLAY:
+            return self.current
+
+        # optons have a lower priority
+        if option is PlayerOption.LOOP:
+            return self.current
+        elif option is PlayerOption.LOOP_QUEUE:
+            self.cursor = (self.cursor + 1) % len(self.open)
+            return self.current
+        else:  # next song
+            for _ in range(self.cursor + 1):
+                self.dequeue(idx=0)
+            self.cursor = 0
+            return self.current
+
     def enqueue(self, elt, top=False):
         if top:
-            self.open.insert(1, elt)
+            self.open.insert(self.cursor + 1, elt)
         else:
             self.open.append(elt)
 
-    def dequeue(self):
-        if self.head:
-            self.close.append(self.open.pop(0))
+    def dequeue(self, idx=0) -> bool:
+        try:
+            elt = self.open.pop(idx)
+        except IndexError:
+            return False
+        else:
+            self.close.append(elt)
             return True
-        return False
 
     @property
     def head(self):
@@ -253,8 +280,20 @@ class PlayerQueue:
         return self.open[-1] if self.open else None
 
     @property
+    def current(self):
+        try:
+            return self.open[self.cursor]
+        except IndexError:
+            return None
+
+    @property
     def duration(self) -> int:
         return sum([req.duration for req in self.open])
+
+
+class GiruState(Enum):
+    IDLE = 1
+    PLAYING = 2
 
 
 class Player:
@@ -264,12 +303,11 @@ class Player:
 
         # ---
 
-        self.player_queue = PlayerQueue()
-        self.state = GiruState.IDLE
+        self.queue = PlayerQueue()
 
-        self.flag_loop: bool = False
-        self.flag_skip: bool = False
-        self.flag_replay: bool = False
+        self.state = GiruState.IDLE
+        self.flag: PlayerFlag = None
+        self.option: PlayerOption = None
 
         # ---
 
@@ -286,11 +324,20 @@ class Player:
     def estimated(self):
         # total duration of the queue
         # minus remaining of the current track
-        return self.player_queue.duration - self.voice.source.progress
+        return self.queue.duration - self.voice.source.progress
+
+    @property
+    def current_progress(self):
+        if self.voice.source:
+            return self.voice.source.progress
+
+    @property
+    def current_remaining(self):
+        return
 
     @property
     def waiting(self):
-        return max(len(self.player_queue) - 1, 0)
+        return max(len(self.queue) - 1, 0)
 
     # -------
 
@@ -313,39 +360,14 @@ class Player:
     # -------
 
     @log_called_function
-    def _play_after(self, e):
-        print(e)
-
-        # should the current head (1st position in open list) closed ?
-        if self.flag_skip:
-            self.flag_skip = False
-            skip = True
-        elif self.flag_replay:
-            self.flag_replay = False
-            skip = False
-        elif self.flag_loop:  # lower priority
-            skip = False
-        else:
-            skip = True
-
-        # skip if needed
-        if skip:
-            self.player_queue.dequeue()
-
-        # ensure to set this flag BEFORE calling consume
-        self.state = GiruState.IDLE
-
-        # _play_after can't be defined as a coroutine
-        self.q.put_nowait(self._consume)
-        # coro = self.put(self._consume)
-        # fut = asyncio.run_coroutine_threadsafe(coro, self.event_loop)
-        # try:
-        #    fut.result()
-        # except:
-        #    pass
-
-    @log_called_function
     async def _play_now(self, req):
+        def after(e):
+            print("after", e)
+            self.queue.next(flag=self.flag, option=self.option)
+            self.state = GiruState.IDLE
+            self.flag = None
+            self.q.put_nowait(self._consume)
+
         await self.join(req.message.author.voice.channel)
         audio = discord.FFmpegPCMAudio(
             req.url,
@@ -358,19 +380,23 @@ class Player:
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()
-        self.voice.play(player, after=self._play_after)
+        self.voice.play(player, after=after)
 
     @log_called_function
-    async def _consume(self):
+    async def _consume(self, play=False):
+        debug("_consume", self.flag, self.option)
         if self.state is GiruState.IDLE:
-            req = self.player_queue.head
-            if req is not None:
+            debug("_consume (GiruState.IDLE) >> now playing")
+            if self.queue.current:
+                debug("_consume >> playing now")
                 self.state = GiruState.PLAYING
-                return await self._play_now(req)
+                await self._play_now(self.queue.current)
             else:
-                debug("_consume", "req is None")
+                debug("_consume >> nothing to consume !")
+        elif self.state is GiruState.PLAYING:
+            debug("_consume (GiruState.PLAYING) >> queued")
         else:
-            debug("_consume", "self.state != GiruState.IDLE")
+            debug("_consume (UNKOWN) >> ?")
 
     # --------------------------------------------------------------------------
 
@@ -386,7 +412,7 @@ class Player:
 
     @log_called_function
     async def play(self, req, top=False):
-        self.player_queue.enqueue(req, top=top)
+        self.queue.enqueue(req, top=top)
         await self.put(self._consume)
         return self.state is GiruState.IDLE
 
@@ -394,6 +420,12 @@ class Player:
     async def disconnect(self):
         if self.voice:
             await self.voice.disconnect()
+
+    @log_called_function
+    async def skip(self):
+        if self.voice:
+            self.flag = PlayerFlag.
+            self.voice.stop()
 
 
 # ------------------------------------------------------------------------------
@@ -448,9 +480,9 @@ class Music(commands.Cog):
         if now_played:
             await locale.send(ctx, "notif_playing_now", req.title)
         else:
-            embed = req.create_embed_queued(
-                estimated=player.estimated, position=player.waiting
-            )
+            estimated = 1 if top else player.estimated
+            position = 1 if top else player.waiting
+            embed = req.create_embed_queued(estimated=estimated, position=position)
             await ctx.send(embed=embed)
 
     @commands.command(aliases=["pt", "ptop"])
@@ -477,7 +509,7 @@ class Music(commands.Cog):
         player = self.get_guild_music(ctx.guild.id)
 
         t = player.voice.source.progress
-        embed = player.player_queue.head.create_embed_np(t)
+        embed = player.queue.head.create_embed_np(t)
 
         await ctx.send(embed=embed)
 
@@ -506,12 +538,22 @@ class Music(commands.Cog):
         await ctx.send("NotImplementedError")
 
     @commands.command(aliases=["skip", "next", "s"])
+    @commands.guild_only()
+    @commands.check(Check.is_playing)
+    @commands.check(Check.same_channel)
     async def voteskip(self, ctx):
-        await ctx.send("NotImplementedError")
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        skiped = player.skip()
+        if skiped:
+            await locale.send(ctx, "notif_skipped")
+        else:
+            debug("voteskip", "not skiped")
 
     @commands.command(aliases=["fs", "fskip"])
     async def forceskip(self, ctx):
-        await ctx.send("NotImplementedError")
+        self.voteskip(ctx)
 
     @commands.command(aliases=["stop"])
     async def pause(self, ctx):
