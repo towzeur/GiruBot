@@ -12,6 +12,7 @@
     "error_no_matches": ":x: **No matches**",
     "error_user_not_in_channel": ":x: **You have to be in a voice channel to use this command.**",
     "error_no_voice_channel": ":x: **I am not connected to a voice channel**, Use the summon command to get me in one",
+    "error_not_same_channel": ":x: You need to be in the same voice channel as Rythm to use this command",
     "error_not_paused": ":x: **The player is not paused**",
     "error_already_paused": ":x: **The player is already paused**",
     "error_nothing_playing": ":x: **Nothing playing in this server**"
