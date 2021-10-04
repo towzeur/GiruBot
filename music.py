@@ -393,7 +393,7 @@ class Player:
 
     @log_called_function
     async def _consume(self, play=False):
-        debug("_consume", self.flag, self.option)
+        debug("_consume", "flag", self.flag, "option", self.option)
         if self.state is GiruState.IDLE:
             debug("_consume (GiruState.IDLE) >> now playing")
             if self.queue.current:
@@ -411,13 +411,16 @@ class Player:
 
     @log_called_function
     async def join(self, channel):
-        if self.voice is None:
-            self.voice = await channel.connect()
-            return True
+        if self.voice is None or not self.voice.is_connected():
+            try:
+                self.voice = await channel.connect()
+            except asyncio.TimeoutError:
+                return "Could not connect to the voice channel in time."
+            except discord.ClientException:
+                return "Already connected to a voice channel."
         if self.voice.channel.id != channel.id:
             await self.voice.move_to(channel)
-            return True
-        return False
+        return True
 
     @log_called_function
     async def play(self, req, top=False):
@@ -446,6 +449,23 @@ class Player:
             self.option = PlayerOption.LOOP
         return self.option is PlayerOption.LOOP
 
+    @log_called_function
+    async def replay(self) -> bool:
+        replayed = self.voice and self.state is GiruState.PLAYING
+        if replayed:
+            self.flag = PlayerFlag.REPLAY
+            self.voice.stop()
+        return replayed
+
+    @log_called_function
+    async def disconnect(self) -> bool:
+        disconnected = self.voice is not None
+        if disconnected:
+            await self.voice.disconnect()
+            del self.voice
+            self.voice = None
+        return disconnected
+
 
 # ------------------------------------------------------------------------------
 
@@ -465,24 +485,25 @@ class Music(commands.Cog):
     # --------------------------------------------------------------------------
 
     @commands.command(aliases=["summon"])
-    @commands.guild_only()
     @commands.check(Check.author_channel)
+    @commands.guild_only()
     async def join(self, ctx):
-        # print(inspect.currentframe().f_code.co_name)
-        voice_channel = ctx.author.voice.channel
-
         player = self.get_guild_music(ctx.guild.id)
-        joined: bool = await player.join(voice_channel)
+        locale = ctx.bot.get_cog("Locales")
 
+        voice_channel = ctx.author.voice.channel
+        joined: bool = await player.join(voice_channel)
         if joined:
-            locale = ctx.bot.get_cog("Locales")
             await locale.send(ctx, "notif_joined", voice_channel)
+        else:
+            debug("join", "not joined")
 
     @commands.command(aliases=["p"])
-    @commands.guild_only()
     @commands.check(Check.author_channel)
+    @commands.guild_only()
     async def play(self, ctx, *args, top=False):
-        name = inspect.currentframe().f_code.co_name
+        # TODO : check if the bot is playing if the author channel is different
+        # from the bot's one
         locale = ctx.bot.get_cog("Locales")
 
         # searching for the given query
@@ -521,9 +542,9 @@ class Music(commands.Cog):
         await ctx.send("NotImplementedError")
 
     @commands.command(aliases=["np"])
-    @commands.guild_only()
     @commands.check(Check.is_playing)
     @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def nowplaying(self, ctx):
         player = self.get_guild_music(ctx.guild.id)
 
@@ -549,12 +570,22 @@ class Music(commands.Cog):
         await ctx.send("NotImplementedError")
 
     @commands.command(aliases=[])
+    @commands.check(Check.is_playing)
+    @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def replay(self, ctx):
-        await ctx.send("NotImplementedError")
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        replayed = await player.replay()
+        if replayed:
+            await locale.send(ctx, "notif_replayed")
+        else:
+            debug("replay", "not replayed")
 
     @commands.command(aliases=["repeat"])
-    @commands.guild_only()
     @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def loop(self, ctx):
         player = self.get_guild_music(ctx.guild.id)
         locale = ctx.bot.get_cog("Locales")
@@ -566,9 +597,9 @@ class Music(commands.Cog):
             await locale.send(ctx, "notif_loop_disabled")
 
     @commands.command(aliases=["skip", "next", "s"])
-    @commands.guild_only()
     @commands.check(Check.is_playing)
     @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def voteskip(self, ctx):
         player = self.get_guild_music(ctx.guild.id)
         locale = ctx.bot.get_cog("Locales")
@@ -596,8 +627,17 @@ class Music(commands.Cog):
         await ctx.send("NotImplementedError")
 
     @commands.command(aliases=["dc", "leave", "dis"])
+    @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def disconnect(self, ctx):
-        await ctx.send("NotImplementedError")
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        if player.voice:
+            await player.disconnect()
+            await locale.send(ctx, "notif_disconnected")
+        else:
+            debug("disconnect", "not disconnected")
 
     # --------------------------------------------------------------------------
 

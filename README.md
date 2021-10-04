@@ -55,7 +55,7 @@ Create a file `secrets.json` and fill out the values
 Song
 - [X] **`join`**
 - [X] **`play`**
-- [ ] **`playtop`**
+- [X] **`playtop`**
 - [ ] **`playskip`**
 - [ ] **`search`**
 - [ ] **`soundcloud`**
@@ -67,9 +67,9 @@ Song
 - [X] **`replay`**
 - [X] **`loop`**
 - [ ] **`voteskip`**
-- [ ] **`forceskip`**
-- [X] **`pause`**
-- [X] **`resume`**
+- [X] **`forceskip`**
+- [ ] **`pause`**
+- [ ] **`resume`**
 - [ ] **`lyrics`**
 - [X] **`disconnect`**
 
