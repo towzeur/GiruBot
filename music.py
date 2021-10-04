@@ -466,6 +466,20 @@ class Player:
             self.voice = None
         return disconnected
 
+    @log_called_function
+    async def pause(self) -> bool:
+        paused = self.voice.is_playing()
+        if paused:
+            self.voice.pause()
+        return paused
+
+    @log_called_function
+    async def resume(self) -> bool:
+        resumed = self.voice.is_paused()
+        if resumed:
+            self.voice.resume()
+        return resumed
+
 
 # ------------------------------------------------------------------------------
 
@@ -615,12 +629,32 @@ class Music(commands.Cog):
         self.voteskip(ctx)
 
     @commands.command(aliases=["stop"])
+    @commands.check(Check.is_playing)
+    @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def pause(self, ctx):
-        await ctx.send("NotImplementedError")
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        paused = await player.pause()
+        if paused:
+            await locale.send(ctx, "notif_paused")
+        else:
+            await locale.send(ctx, "error_already_paused")
 
     @commands.command(aliases=["re", "res", "continue"])
+    @commands.check(Check.is_playing)
+    @commands.check(Check.same_channel)
+    @commands.guild_only()
     async def resume(self, ctx):
-        await ctx.send("NotImplementedError")
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        resumed = await player.resume()
+        if resumed:
+            await locale.send(ctx, "notif_resumed")
+        else:
+            await locale.send(ctx, "error_not_paused")
 
     @commands.command(aliases=["l", "ly"])
     async def lyrics(self, ctx):
@@ -633,8 +667,8 @@ class Music(commands.Cog):
         player = self.get_guild_music(ctx.guild.id)
         locale = ctx.bot.get_cog("Locales")
 
-        if player.voice:
-            await player.disconnect()
+        disconnected = await player.disconnect()
+        if disconnected:
             await locale.send(ctx, "notif_disconnected")
         else:
             debug("disconnect", "not disconnected")
