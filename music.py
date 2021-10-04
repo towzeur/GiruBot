@@ -322,9 +322,18 @@ class Player:
 
     @property
     def estimated(self):
+        """estimated times before the last queued request is played"""
         # total duration of the queue
         # minus remaining of the current track
-        return self.queue.duration - self.voice.source.progress
+        t = self.queue.duration
+        t -= self.voice.source.progress
+        t -= self.queue.tail.duration
+        return t
+
+    @property
+    def estimated_next(self):
+        """estimated time until the end of the current song"""
+        return self.queue.current.duration - self.voice.source.progress
 
     @property
     def current_progress(self):
@@ -490,7 +499,7 @@ class Music(commands.Cog):
         if now_played:
             await locale.send(ctx, "notif_playing_now", req.title)
         else:
-            estimated = 1 if top else player.estimated
+            estimated = player.estimated_next if top else player.estimated
             position = 1 if top else player.waiting
             embed = req.create_embed_queued(estimated=estimated, position=position)
             await ctx.send(embed=embed)
