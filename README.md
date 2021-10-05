@@ -56,7 +56,7 @@ Song
 - [X] **`join`**
 - [X] **`play`**
 - [X] **`playtop`**
-- [ ] **`playskip`**
+- [X] **`playskip`**
 - [ ] **`search`**
 - [ ] **`soundcloud`**
 - [X] **`nowplaying`**
@@ -68,8 +68,8 @@ Song
 - [X] **`loop`**
 - [ ] **`voteskip`**
 - [X] **`forceskip`**
-- [ ] **`pause`**
-- [ ] **`resume`**
+- [X] **`pause`**
+- [X] **`resume`**
 - [ ] **`lyrics`**
 - [X] **`disconnect`**
 

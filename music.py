@@ -175,7 +175,9 @@ class Request:
         )
         embed.add_field(
             name="Estimated time until playing",
-            value=convert_to_youtube_time_format(estimated),
+            value=estimated
+            if isinstance(estimated, str)
+            else convert_to_youtube_time_format(estimated),
             inline=True,
         )
         embed.add_field(
@@ -515,7 +517,7 @@ class Music(commands.Cog):
     @commands.command(aliases=["p"])
     @commands.check(Check.author_channel)
     @commands.guild_only()
-    async def play(self, ctx, *args, top=False):
+    async def play(self, ctx, *args, top=False, skip=False) -> bool:
         # TODO : check if the bot is playing if the author channel is different
         # from the bot's one
         locale = ctx.bot.get_cog("Locales")
@@ -525,27 +527,36 @@ class Music(commands.Cog):
         await locale.send(ctx, "notif_loop_searching", query)
         req = await Request.from_youtube(query, ctx.message)
         if req is None:
-            return await locale.send(ctx, "error_no_matches")
+            await locale.send(ctx, "error_no_matches")
+            return False
 
         # play the song
         player = self.get_guild_music(ctx.guild.id)
         now_played: bool = await player.play(req, top=top)
 
-        if now_played:
+        if skip:  # playtop
+            embed = req.create_embed_queued(estimated="Now", position="Now")
+            await ctx.send(embed=embed)
+            if not now_played:  # skip if necessary
+                skiped: bool = await player.skip()
+        elif now_played:
             await locale.send(ctx, "notif_playing_now", req.title)
         else:
             estimated = player.estimated_next if top else player.estimated
             position = 1 if top else player.waiting
             embed = req.create_embed_queued(estimated=estimated, position=position)
             await ctx.send(embed=embed)
+        return True
 
     @commands.command(aliases=["pt", "ptop"])
     async def playtop(self, ctx, *args):
-        await self.play(ctx, *args, top=True)
+        await self.play(ctx, *args, top=True, skip=False)
 
     @commands.command(aliases=["ps", "pskip", "playnow", "pn"])
-    async def playskip(self, ctx):
-        await ctx.send("NotImplementedError")
+    @commands.check(Check.author_channel)
+    @commands.guild_only()
+    async def playskip(self, ctx, *args):
+        await self.play(ctx, *args, top=True, skip=True)
 
     @commands.command(aliases=["find"])
     async def search(self, ctx):
@@ -618,15 +629,16 @@ class Music(commands.Cog):
         player = self.get_guild_music(ctx.guild.id)
         locale = ctx.bot.get_cog("Locales")
 
-        skiped = await player.skip()
+        skiped: bool = await player.skip()
         if skiped:
             await locale.send(ctx, "notif_skipped")
         else:
             debug("voteskip", "not skiped")
+        return skiped
 
     @commands.command(aliases=["fs", "fskip"])
     async def forceskip(self, ctx):
-        self.voteskip(ctx)
+        await self.voteskip(ctx)
 
     @commands.command(aliases=["stop"])
     @commands.check(Check.is_playing)

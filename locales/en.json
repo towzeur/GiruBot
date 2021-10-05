@@ -16,5 +16,6 @@
     "error_not_same_channel": ":x: **You need to be in the same voice channel as Rythm to use this command**",
     "error_not_paused": ":x: **The player is not paused**",
     "error_already_paused": ":x: **The player is already paused**",
-    "error_nothing_playing": ":x: **Nothing playing in this server**"
+    "error_nothing_playing": ":x: **Nothing playing in this server**",
+    "error_max_queue": ":x: **Unable to queue song, you have reached the maximum songs you can have in the queue**"
 }
