@@ -521,10 +521,15 @@ class Music(commands.Cog):
         self.bot = bot
         self.guilds_player = {}
 
-    def get_guild_music(self, guild_id: int) -> dict:
+    def get_guild_player(self, guild_id: int) -> dict:
         if guild_id not in self.guilds_player:
             self.guilds_player[guild_id] = Player(self.bot, guild_id)
         return self.guilds_player[guild_id]
+
+    def get_player_and_locale(self, ctx):
+        player = self.et_guild_player(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+        return player, locale
 
     # --------------------------------------------------------------------------
     # Song
@@ -534,8 +539,7 @@ class Music(commands.Cog):
     @commands.check(Check.author_channel)
     @commands.guild_only()
     async def join(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         voice_channel = ctx.author.voice.channel
         joined: bool = await player.join(voice_channel)
@@ -564,7 +568,8 @@ class Music(commands.Cog):
         player = self.get_guild_music(ctx.guild.id)
         now_played: bool = await player.play(req, top=top)
 
-        if skip:  # playtop
+        # playtop
+        if skip:
             embed = req.create_embed_queued(estimated="Now", position="Now")
             await ctx.send(embed=embed)
             if not now_played:  # skip if necessary
@@ -601,11 +606,9 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def nowplaying(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-
+        player, locale = self.get_player_and_locale()
         t = player.voice.source.progress
         embed = player.queue.current.create_embed_np(t)
-
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["save", "yoink"])
@@ -629,8 +632,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def replay(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         replayed = await player.replay()
         if replayed:
@@ -642,8 +644,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def loop(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         looped = await player.loop()
         if looped:
@@ -656,8 +657,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def voteskip(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         skiped: bool = await player.skip()
         if skiped:
@@ -675,8 +675,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def pause(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         paused = await player.pause()
         if paused:
@@ -689,8 +688,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def resume(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         resumed = await player.resume()
         if resumed:
@@ -706,8 +704,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def disconnect(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         disconnected = await player.disconnect()
         if disconnected:
@@ -719,7 +716,7 @@ class Music(commands.Cog):
 
     @commands.command()
     async def test(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
+        player, locale = self.get_player_and_locale()
         from embed_generator import create_embed_queue
 
         embed = create_embed_queue(ctx, player.queue)
@@ -733,8 +730,7 @@ class Music(commands.Cog):
 
     @commands.command(aliases=["qloop", "lq", "queueloop"])
     async def loopqueue(self, ctx):
-        player = self.get_guild_music(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale()
 
         looped_queue = await player.loopqueue()
         if looped_queue:
