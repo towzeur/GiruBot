@@ -1,9 +1,7 @@
 from msvcrt import putch
 import discord
 import asyncio
-from discord import channel
 import youtube_dl
-import inspect
 
 from discord.ext import commands
 from re import S
@@ -128,20 +126,42 @@ class Request:
         #    info = ydl.extract_info(query, download=False)
 
         # ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
-        loop = asyncio.get_event_loop()
-        downloader = partial(cls.ytdl.extract_info, query, download=False)
-        # , process=False)
-        info = await loop.run_in_executor(None, downloader)
+        if False:
+            loop = asyncio.get_event_loop()
+            downloader = partial(cls.ytdl.extract_info, query, download=False)
+            # , process=False)
+            info = await loop.run_in_executor(None, downloader)
+        try:
+            with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ytdl:
+                ytdl.cache.remove()
+                # Arguments:
+                # url -- URL to extract
+                # Keyword arguments:
+                # download -- whether to download videos during extraction
+                # ie_key -- extractor key hint
+                # extra_info -- dictionary containing the extra values to add to each result
+                # process -- whether to resolve all unresolved references (URLs, playlist items),
+                #    must be True for download to work.
+                # force_generic_extractor -- force using the generic extractor
+                info: dict = ytdl.extract_info(
+                    query,
+                    download=False,
+                    ie_key=None,
+                    extra_info={},
+                    process=True,
+                    force_generic_extractor=False,
+                )
+                # ytdl.prepare_filename(info_dict)
+                # ytdl.download([url])
+        except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
+            debug(e)
+            return None
 
-        if "entries" in info:
-            entry = None
-            while entry is None:
-                try:
-                    entry = info["entries"].pop(0)
-                except IndexError:
-                    return None
-        else:
-            entry = info
+        with open("tmp_entries.txt", "w", encoding="utf-8") as f:
+            pprint(info, stream=f)
+
+        # this value is not an exact match, but it's a good approximation
+        entry = info["entries"][0] if "entries" in info else info
 
         # pprint(info)
         return cls(
@@ -153,7 +173,7 @@ class Request:
             title="Added to queue",
             description=Markdown.bold(self.title),
             color=0x00AFF4,
-            url=self.url,
+            url=f"https://www.youtube.com/watch?v={self.info['display_id']}",
         )
         # embed.set_image(*, query)
         # embed.set_thumbnail(*, url)
@@ -225,7 +245,7 @@ class PlayerFlag(Enum):
     REPLAY = 2
 
 
-class PlayerOption(Enum):
+class PlayerModifier(Enum):
     LOOP = 1
     LOOP_QUEUE = 2
 
@@ -235,21 +255,51 @@ class PlayerQueue:
         self.close, self.open = [], []
         self.cursor = 0
 
+        self.flag: PlayerFlag = None
+        self.modifiers: list[PlayerModifier] = []
+
     def __len__(self):
         return len(self.open)
 
-    def next(self, flag: PlayerFlag = None, option: PlayerOption = None):
+    @property
+    def head(self):
+        return self.open[0] if self.open else None
+
+    @property
+    def tail(self):
+        return self.open[-1] if self.open else None
+
+    @property
+    def current(self):
+        try:
+            return self.open[self.cursor]
+        except IndexError:
+            return None
+
+    @property
+    def duration(self) -> int:
+        return sum([req.duration for req in self.open])
+
+    def toggle_option(self, option: PlayerModifier):
+        enabled = option in self.modifiers
+        if enabled:
+            self.modifiers.remove(option)
+        else:
+            self.modifiers.append(option)
+        return not enabled
+
+    def next(self):
         # flags have a higher priority
-        if flag is PlayerFlag.SKIP:
+        if self.flag is PlayerFlag.SKIP:
             self.dequeue(idx=self.cursor)
             return self.current
-        elif flag is PlayerFlag.REPLAY:
+        elif self.flag is PlayerFlag.REPLAY:
             return self.current
 
         # optons have a lower priority
-        if option is PlayerOption.LOOP:
+        if PlayerModifier.LOOP in self.modifiers:
             return self.current
-        elif option is PlayerOption.LOOP_QUEUE:
+        elif PlayerModifier.LOOP_QUEUE in self.modifiers:
             self.cursor = (self.cursor + 1) % len(self.open)
             return self.current
         else:  # next song
@@ -273,25 +323,6 @@ class PlayerQueue:
             self.close.append(elt)
             return True
 
-    @property
-    def head(self):
-        return self.open[0] if self.open else None
-
-    @property
-    def tail(self):
-        return self.open[-1] if self.open else None
-
-    @property
-    def current(self):
-        try:
-            return self.open[self.cursor]
-        except IndexError:
-            return None
-
-    @property
-    def duration(self) -> int:
-        return sum([req.duration for req in self.open])
-
 
 class GiruState(Enum):
     IDLE = 1
@@ -306,10 +337,7 @@ class Player:
         # ---
 
         self.queue = PlayerQueue()
-
         self.state = GiruState.IDLE
-        self.flag: PlayerFlag = None
-        self.option: PlayerOption = None
 
         # ---
 
@@ -372,11 +400,11 @@ class Player:
 
     @log_called_function
     async def _play_now(self, req):
-        def after(e):
-            print("after", e)
-            self.queue.next(flag=self.flag, option=self.option)
+        def after(error):
+            print("after", error)
+            self.queue.next()
             self.state = GiruState.IDLE
-            self.flag = None
+            self.queue.flag = None
             self.q.put_nowait(self._consume)
 
         await self.join(req.message.author.voice.channel)
@@ -395,7 +423,7 @@ class Player:
 
     @log_called_function
     async def _consume(self, play=False):
-        debug("_consume", "flag", self.flag, "option", self.option)
+        debug("_consume", "flag", self.queue.flag, "option", self.queue.modifiers)
         if self.state is GiruState.IDLE:
             debug("_consume (GiruState.IDLE) >> now playing")
             if self.queue.current:
@@ -439,23 +467,25 @@ class Player:
     async def skip(self) -> bool:
         skiped = self.voice and self.state is GiruState.PLAYING
         if skiped:
-            self.flag = PlayerFlag.SKIP
+            self.queue.flag = PlayerFlag.SKIP
             self.voice.stop()
         return skiped
 
     @log_called_function
     async def loop(self) -> bool:
-        if self.option is PlayerOption.LOOP:
-            self.option = None
-        else:
-            self.option = PlayerOption.LOOP
-        return self.option is PlayerOption.LOOP
+        enabled: bool = self.queue.toggle_option(PlayerModifier.LOOP)
+        return enabled
+
+    @log_called_function
+    async def loopqueue(self) -> bool:
+        enabled: bool = self.queue.toggle_option(PlayerModifier.LOOP_QUEUE)
+        return enabled
 
     @log_called_function
     async def replay(self) -> bool:
         replayed = self.voice and self.state is GiruState.PLAYING
         if replayed:
-            self.flag = PlayerFlag.REPLAY
+            self.queue.flag = PlayerFlag.REPLAY
             self.voice.stop()
         return replayed
 
@@ -574,7 +604,7 @@ class Music(commands.Cog):
         player = self.get_guild_music(ctx.guild.id)
 
         t = player.voice.source.progress
-        embed = player.queue.head.create_embed_np(t)
+        embed = player.queue.current.create_embed_np(t)
 
         await ctx.send(embed=embed)
 
@@ -689,8 +719,54 @@ class Music(commands.Cog):
 
     @commands.command()
     async def test(self, ctx):
+        player = self.get_guild_music(ctx.guild.id)
         from embed_generator import create_embed_queue
 
-        embed = create_embed_queue()
+        embed = create_embed_queue(ctx, player.queue)
         await ctx.send(embed=embed)
+
+    # --------------------------------------------------------------------------
+
+    @commands.command(aliases=["q"])
+    async def queue(self, ctx):
+        ...
+
+    @commands.command(aliases=["qloop", "lq", "queueloop"])
+    async def loopqueue(self, ctx):
+        player = self.get_guild_music(ctx.guild.id)
+        locale = ctx.bot.get_cog("Locales")
+
+        looped_queue = await player.loopqueue()
+        if looped_queue:
+            await locale.send(ctx, "notif_queue_loop_enabled")
+        else:
+            await locale.send(ctx, "notif_queue_loop_disabled")
+
+    @commands.command(aliases=["m", "mv"])
+    async def move(self, ctx):
+        ...
+
+    @commands.command(aliases=["st"])
+    async def skipto(self, ctx, position: int):
+        ...
+
+    @commands.command(aliases=["random"])
+    async def shuffle(self, ctx):
+        ...
+
+    @commands.command(aliases=["rm"])
+    async def remove(self, ctx, numbers: int):
+        ...
+
+    @commands.command(aliases=["cl"])
+    async def clear(self, ctx, user):
+        ...
+
+    @commands.command(aliases=["lc"])
+    async def leavecleanup(self, ctx):
+        ...
+
+    @commands.command(aliases=["rmd", "rd", "drm"])
+    async def removedupes(self, ctx):
+        ...
 
