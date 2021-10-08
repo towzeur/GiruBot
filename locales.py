@@ -1,8 +1,10 @@
 import glob
 import json
-from pathlib import Path
 
 from discord.ext import commands
+from pathlib import Path
+from types import SimpleNamespace
+
 from options import LOCALE_DEFAULT, LOCALE_FILE_TEMPLATE
 
 
@@ -27,7 +29,9 @@ class Locales(commands.Cog):
         if language not in cls.CACHE:
             locale_filename = LOCALE_FILE_TEMPLATE.format(language)
             with open(locale_filename, "r", encoding="utf8") as file:
-                cls.CACHE[language] = json.load(file)
+                cls.CACHE[language] = json.load(
+                    file, object_hook=lambda d: SimpleNamespace(**d)
+                )
         return cls.CACHE[language]
 
     def get_guild_locale(self, guild_id: int) -> dict:

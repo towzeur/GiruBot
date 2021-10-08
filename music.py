@@ -23,6 +23,11 @@ from utils import convert_to_youtube_time_format, Markdown, log_called_function,
 
 youtube_dl.utils.bug_reports_message = lambda: ""
 
+
+def get_locale_from_context(ctx):
+    return ctx.bot.get_cog("Locales").get_guild_locale(ctx.guild.id)
+
+
 # ------------------------------------------------------------------------------
 
 
@@ -32,8 +37,8 @@ class Check:
         if ctx.author.voice and ctx.author.voice.channel:
             return True
 
-        locale = ctx.bot.get_cog("Locales")
-        await locale.send(ctx, "error_user_not_in_channel")
+        locale = ctx.bot.get_cog("Locales").get_guild_locale(ctx.guild.id)
+        await ctx.send(locale.error_user_not_in_channel)
         return False
         # commands.CommandError
 
@@ -43,8 +48,8 @@ class Check:
         if voice_bot and voice_bot.channel:
             return True
 
-        locale = ctx.bot.get_cog("Locales")
-        await locale.send(ctx, "error_no_voice_channel")
+        locale = get_locale_from_context(ctx)
+        await ctx.send(locale.error_no_voice_channel)
         return False
         # voice_author.channel == voice_bot.channel
 
@@ -58,8 +63,8 @@ class Check:
         if ctx.author.voice.channel == ctx.guild.voice_client.channel:
             return True
 
-        locale = ctx.bot.get_cog("Locales")
-        await locale.send(ctx, "error_not_same_channel")
+        locale = get_locale_from_context(ctx)
+        await ctx.send(locale.error_not_same_channel)
         return False
         # voice_author.channel == voice_bot.channel
 
@@ -70,8 +75,8 @@ class Check:
         if client and client.channel and client.source:
             return True
 
-        locale = ctx.bot.get_cog("Locales")
-        await locale.send(ctx, "error_nothing_playing")
+        locale = get_locale_from_context(ctx)
+        await ctx.send(locale.error_nothing_playing)
         return False
 
 
@@ -521,15 +526,13 @@ class Music(commands.Cog):
         self.bot = bot
         self.guilds_player = {}
 
-    def get_guild_player(self, guild_id: int) -> dict:
-        if guild_id not in self.guilds_player:
-            self.guilds_player[guild_id] = Player(self.bot, guild_id)
-        return self.guilds_player[guild_id]
-
     def get_player_and_locale(self, ctx):
-        player = self.et_guild_player(ctx.guild.id)
-        locale = ctx.bot.get_cog("Locales")
-        return player, locale
+        guild_id = ctx.guild.id
+        player = self.guilds_player.get(guild_id)
+        if player is None:
+            player = Player(self.bot, guild_id)
+            self.guilds_player[guild_id] = player
+        return player, get_locale_from_context(ctx)
 
     # --------------------------------------------------------------------------
     # Song
@@ -539,12 +542,12 @@ class Music(commands.Cog):
     @commands.check(Check.author_channel)
     @commands.guild_only()
     async def join(self, ctx):
-        player, locale = self.get_player_and_locale()
+        player, locale = self.get_player_and_locale(ctx)
 
         voice_channel = ctx.author.voice.channel
         joined: bool = await player.join(voice_channel)
         if joined:
-            await locale.send(ctx, "notif_joined", voice_channel)
+            await ctx.send(locale.notif_joined.format(voice_channel))
         else:
             debug("join", "not joined")
 
@@ -554,18 +557,17 @@ class Music(commands.Cog):
     async def play(self, ctx, *args, top=False, skip=False) -> bool:
         # TODO : check if the bot is playing if the author channel is different
         # from the bot's one
-        locale = ctx.bot.get_cog("Locales")
+        player, locale = self.get_player_and_locale(ctx)
 
         # searching for the given query
         query = " ".join(args)
-        await locale.send(ctx, "notif_loop_searching", query)
+        await ctx.send(locale.notif_loop_searching.format(query))
         req = await Request.from_youtube(query, ctx.message)
         if req is None:
-            await locale.send(ctx, "error_no_matches")
+            await ctx.send(locale.error_no_matches)
             return False
 
         # play the song
-        player = self.get_guild_music(ctx.guild.id)
         now_played: bool = await player.play(req, top=top)
 
         # playtop
@@ -575,7 +577,7 @@ class Music(commands.Cog):
             if not now_played:  # skip if necessary
                 skiped: bool = await player.skip()
         elif now_played:
-            await locale.send(ctx, "notif_playing_now", req.title)
+            await ctx.send(locale.notif_playing_now.format(req.title))
         else:
             estimated = player.estimated_next if top else player.estimated
             position = 1 if top else player.waiting
@@ -606,7 +608,7 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def nowplaying(self, ctx):
-        player, locale = self.get_player_and_locale()
+        player, locale = self.get_player_and_locale(ctx)
         t = player.voice.source.progress
         embed = player.queue.current.create_embed_np(t)
         await ctx.send(embed=embed)
@@ -632,11 +634,10 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def replay(self, ctx):
-        player, locale = self.get_player_and_locale()
-
+        player, locale = self.get_player_and_locale(ctx)
         replayed = await player.replay()
         if replayed:
-            await locale.send(ctx, "notif_replayed")
+            await ctx.send(locale.notif_replayed)
         else:
             debug("replay", "not replayed")
 
@@ -644,24 +645,23 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def loop(self, ctx):
-        player, locale = self.get_player_and_locale()
-
+        player, locale = self.get_player_and_locale(ctx)
         looped = await player.loop()
         if looped:
-            await locale.send(ctx, "notif_loop_enabled")
+            await ctx.send(locale.notif_loop_enabled)
         else:
-            await locale.send(ctx, "notif_loop_disabled")
+            await ctx.send(locale.notif_loop_disabled)
 
     @commands.command(aliases=["skip", "next", "s"])
     @commands.check(Check.is_playing)
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def voteskip(self, ctx):
-        player, locale = self.get_player_and_locale()
+        player, locale = self.get_player_and_locale(ctx)
 
         skiped: bool = await player.skip()
         if skiped:
-            await locale.send(ctx, "notif_skipped")
+            await ctx.send(locale.notif_skipped)
         else:
             debug("voteskip", "not skiped")
         return skiped
@@ -675,26 +675,24 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def pause(self, ctx):
-        player, locale = self.get_player_and_locale()
-
+        player, locale = self.get_player_and_locale(ctx)
         paused = await player.pause()
         if paused:
-            await locale.send(ctx, "notif_paused")
+            await ctx.send(locale.notif_paused)
         else:
-            await locale.send(ctx, "error_already_paused")
+            await ctx.send(locale.error_already_paused)
 
     @commands.command(aliases=["re", "res", "continue"])
     @commands.check(Check.is_playing)
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def resume(self, ctx):
-        player, locale = self.get_player_and_locale()
-
+        player, locale = self.get_player_and_locale(ctx)
         resumed = await player.resume()
         if resumed:
-            await locale.send(ctx, "notif_resumed")
+            await ctx.send(locale.notif_resumed)
         else:
-            await locale.send(ctx, "error_not_paused")
+            await ctx.send(locale.error_not_paused)
 
     @commands.command(aliases=["l", "ly"])
     async def lyrics(self, ctx):
@@ -704,11 +702,11 @@ class Music(commands.Cog):
     @commands.check(Check.same_channel)
     @commands.guild_only()
     async def disconnect(self, ctx):
-        player, locale = self.get_player_and_locale()
+        player, locale = self.get_player_and_locale(ctx)
 
         disconnected = await player.disconnect()
         if disconnected:
-            await locale.send(ctx, "notif_disconnected")
+            await ctx.send(locale.notif_disconnected)
         else:
             debug("disconnect", "not disconnected")
 
@@ -716,7 +714,7 @@ class Music(commands.Cog):
 
     @commands.command()
     async def test(self, ctx):
-        player, locale = self.get_player_and_locale()
+        player, locale = self.get_player_and_locale(ctx)
         from embed_generator import create_embed_queue
 
         embed = create_embed_queue(ctx, player.queue)
@@ -730,13 +728,13 @@ class Music(commands.Cog):
 
     @commands.command(aliases=["qloop", "lq", "queueloop"])
     async def loopqueue(self, ctx):
-        player, locale = self.get_player_and_locale()
+        player, locale = self.get_player_and_locale(ctx)
 
         looped_queue = await player.loopqueue()
         if looped_queue:
-            await locale.send(ctx, "notif_queue_loop_enabled")
+            await ctx.send(locale.notif_queue_loop_enabled)
         else:
-            await locale.send(ctx, "notif_queue_loop_disabled")
+            await ctx.send(locale.notif_queue_loop_disabled)
 
     @commands.command(aliases=["m", "mv"])
     async def move(self, ctx):
