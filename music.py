@@ -19,7 +19,9 @@ from options import (
     FFMPEG_OPTIONS,
     DEFAULT_VOLUME,
 )
-from utils import convert_to_youtube_time_format, Markdown, log_called_function, debug
+from utils import log_called_function, debug
+from embed_generator import EmbedGenerator
+from player_queue import PlayerQueue
 
 youtube_dl.utils.bug_reports_message = lambda: ""
 
@@ -34,24 +36,19 @@ def get_locale_from_context(ctx):
 class Check:
     @staticmethod
     async def author_channel(ctx):
-        if ctx.author.voice and ctx.author.voice.channel:
-            return True
-
-        locale = ctx.bot.get_cog("Locales").get_guild_locale(ctx.guild.id)
-        await ctx.send(locale.error_user_not_in_channel)
-        return False
-        # commands.CommandError
+        if not (ctx.author.voice and ctx.author.voice.channel):
+            locale = get_locale_from_context(ctx)
+            await ctx.send(locale.error_user_not_in_channel)
+            return False
+        return True
 
     @staticmethod
     async def bot_channel(ctx):
-        voice_bot = ctx.guild.voice_client
-        if voice_bot and voice_bot.channel:
-            return True
-
-        locale = get_locale_from_context(ctx)
-        await ctx.send(locale.error_no_voice_channel)
-        return False
-        # voice_author.channel == voice_bot.channel
+        if not (ctx.guild.voice_client and ctx.guild.voice_client.channel):
+            locale = get_locale_from_context(ctx)
+            await ctx.send(locale.error_no_voice_channel)
+            return False
+        return True
 
     @staticmethod
     async def same_channel(ctx):
@@ -60,24 +57,25 @@ class Check:
             return False
         if not await Check.bot_channel(ctx):
             return False
-        if ctx.author.voice.channel == ctx.guild.voice_client.channel:
-            return True
-
-        locale = get_locale_from_context(ctx)
-        await ctx.send(locale.error_not_same_channel)
-        return False
-        # voice_author.channel == voice_bot.channel
+        if not (ctx.author.voice.channel == ctx.guild.voice_client.channel):
+            locale = get_locale_from_context(ctx)
+            await ctx.send(locale.error_not_same_channel)
+            return False
+        return True
 
     @staticmethod
     async def is_playing(ctx):
         """Checks that audio is currently playing before continuing."""
-        client = ctx.guild.voice_client
-        if client and client.channel and client.source:
-            return True
+        # client = ctx.guild.voice_client
+        # if not (client and client.channel and client.source):
+        #    return False
 
-        locale = get_locale_from_context(ctx)
-        await ctx.send(locale.error_nothing_playing)
-        return False
+        player, locale = ctx.bot.get_cog("Music").get_player_and_locale(ctx)
+        if not player.is_playing:
+            await ctx.send(locale.error_nothing_playing)
+            return False
+
+        return True
 
 
 # ------------------------------------------------------------------------------
@@ -159,7 +157,7 @@ class Request:
                 # ytdl.prepare_filename(info_dict)
                 # ytdl.download([url])
         except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
-            debug(e)
+            debug("from_youtube", "exception", e)
             return None
 
         with open("tmp_entries.txt", "w", encoding="utf-8") as f:
@@ -173,168 +171,15 @@ class Request:
             message, query, entry, entry["title"], entry["url"], entry["duration"]
         )
 
-    def create_embed_queued(self, estimated="???", position="???"):
-        embed = discord.Embed(
-            title="Added to queue",
-            description=Markdown.bold(self.title),
-            color=0x00AFF4,
-            url=f"https://www.youtube.com/watch?v={self.info['display_id']}",
-        )
-        # embed.set_image(*, query)
-        # embed.set_thumbnail(*, url)
-        # embed.set_author(*, name, url=Embed.Empty, icon_url=Embed.Empty)
-        # print(self.info["thumbnail"])
-        # embed.set_image(self.info["thumbnail"])
-        # embed.add_field(name=self.title, value=f"[Click]({self.url})")
-
-        embed.set_thumbnail(url=self.info["thumbnail"])
-
-        # Markdown.bold(
-        embed.add_field(
-            name="Channel", value=str(self.message.author.voice.channel), inline=True,
-        )
-        embed.add_field(
-            name="Song Duration",
-            value=convert_to_youtube_time_format(self.duration),
-            inline=True,
-        )
-        embed.add_field(
-            name="Estimated time until playing",
-            value=estimated
-            if isinstance(estimated, str)
-            else convert_to_youtube_time_format(estimated),
-            inline=True,
-        )
-        embed.add_field(
-            name="Position in queue", value=position, inline=True,
-        )
-        return embed
-
-    def create_embed_np(self, t, ticks=30):
-        x = int(ticks * (t / self.duration))
-        print(t, self.duration, x, "%")
-
-        embed = discord.Embed(
-            title=self.title,
-            url=self.url,
-            # description=Markdown.bold(self.title),
-            color=0x00AFF4,
-        )
-        embed.set_thumbnail(url=self.info["thumbnail"])
-        embed.set_author(name="Now Playing ♪")
-        # "ㅤ"
-        # progress bar
-        line = "".join(["▬" if t != x else "🔘" for t in range(ticks)])
-        embed.add_field(
-            name="\rx", value=Markdown.code(line) + "\n\u200b", inline=False,
-        )
-        # 5:26 / 16:26
-        d_current = convert_to_youtube_time_format(t)
-        d_end = convert_to_youtube_time_format(self.duration)
-        line = f"{d_current} / {d_end}"
-        embed.add_field(
-            name="\rx", value=Markdown.code(line) + "\n\u200b", inline=False,
-        )
-        # Requested by
-        line = f"`Requested by:` {self.message.author.name}"
-        embed.add_field(name="\rx", value=line, inline=False)
-        # return "\u200B"
-        return embed
-
 
 # ------------------------------------------------------------------------------
 
 
-class PlayerFlag(Enum):
-    SKIP = 1
-    REPLAY = 2
-
-
-class PlayerModifier(Enum):
-    LOOP = 1
-    LOOP_QUEUE = 2
-
-
-class PlayerQueue:
-    def __init__(self):
-        self.close, self.open = [], []
-        self.cursor = 0
-
-        self.flag: PlayerFlag = None
-        self.modifiers: list[PlayerModifier] = []
-
-    def __len__(self):
-        return len(self.open)
-
-    @property
-    def head(self):
-        return self.open[0] if self.open else None
-
-    @property
-    def tail(self):
-        return self.open[-1] if self.open else None
-
-    @property
-    def current(self):
-        try:
-            return self.open[self.cursor]
-        except IndexError:
-            return None
-
-    @property
-    def duration(self) -> int:
-        return sum([req.duration for req in self.open])
-
-    def toggle_option(self, option: PlayerModifier):
-        enabled = option in self.modifiers
-        if enabled:
-            self.modifiers.remove(option)
-        else:
-            self.modifiers.append(option)
-        return not enabled
-
-    def next(self):
-        # flags have a higher priority
-        if self.flag is PlayerFlag.SKIP:
-            self.dequeue(idx=self.cursor)
-            return self.current
-        elif self.flag is PlayerFlag.REPLAY:
-            return self.current
-
-        # optons have a lower priority
-        if PlayerModifier.LOOP in self.modifiers:
-            return self.current
-        elif PlayerModifier.LOOP_QUEUE in self.modifiers:
-            self.cursor = (self.cursor + 1) % len(self.open)
-            return self.current
-        else:  # next song
-            for _ in range(self.cursor + 1):
-                self.dequeue(idx=0)
-            self.cursor = 0
-            return self.current
-
-    def enqueue(self, elt, top=False):
-        if top:
-            self.open.insert(self.cursor + 1, elt)
-        else:
-            self.open.append(elt)
-
-    def dequeue(self, idx=0) -> bool:
-        try:
-            elt = self.open.pop(idx)
-        except IndexError:
-            return False
-        else:
-            self.close.append(elt)
-            return True
-
-
-class GiruState(Enum):
-    IDLE = 1
-    PLAYING = 2
-
-
 class Player:
+    class State(Enum):
+        IDLE = 1
+        PLAYING = 2
+
     def __init__(self, bot, guild_id):
         self.bot = bot
         self.guild_id = guild_id
@@ -342,7 +187,7 @@ class Player:
         # ---
 
         self.queue = PlayerQueue()
-        self.state = GiruState.IDLE
+        self.state = Player.State.IDLE
 
         # ---
 
@@ -352,6 +197,22 @@ class Player:
         self.voice: discord.VoiceClient = None
 
         self.event_loop.create_task(self.run())
+
+    # --------------------------------------------------------------------------
+
+    @property
+    def is_playing(self) -> bool:
+        return self.state is Player.State.PLAYING
+
+    def set_playing(self):
+        self.state = Player.State.PLAYING
+
+    @property
+    def is_idle(self) -> bool:
+        return self.state is Player.State.IDLE
+
+    def set_idle(self):
+        self.state = Player.State.IDLE
 
     # -------
 
@@ -369,19 +230,6 @@ class Player:
     def estimated_next(self):
         """estimated time until the end of the current song"""
         return self.queue.current.duration - self.voice.source.progress
-
-    @property
-    def current_progress(self):
-        if self.voice.source:
-            return self.voice.source.progress
-
-    @property
-    def current_remaining(self):
-        return
-
-    @property
-    def waiting(self):
-        return max(len(self.queue) - 1, 0)
 
     # -------
 
@@ -405,11 +253,15 @@ class Player:
 
     @log_called_function
     async def _play_now(self, req):
+        print(
+            "_play_now >> vid :", req.info["webpage_url"],
+        )
+
         def after(error):
             print("after", error)
             self.queue.next()
-            self.state = GiruState.IDLE
-            self.queue.flag = None
+            self.set_idle()
+            self.queue.unset_flag()
             self.q.put_nowait(self._consume)
 
         await self.join(req.message.author.voice.channel)
@@ -429,18 +281,18 @@ class Player:
     @log_called_function
     async def _consume(self, play=False):
         debug("_consume", "flag", self.queue.flag, "option", self.queue.modifiers)
-        if self.state is GiruState.IDLE:
-            debug("_consume (GiruState.IDLE) >> now playing")
+        if self.is_idle:
+            debug("_consume", "(IDLE)", ">> now playing")
             if self.queue.current:
                 debug("_consume >> playing now")
-                self.state = GiruState.PLAYING
+                self.set_playing()
                 await self._play_now(self.queue.current)
             else:
-                debug("_consume >> nothing to consume !")
-        elif self.state is GiruState.PLAYING:
-            debug("_consume (GiruState.PLAYING) >> queued")
+                debug("_consume", "(IDLE)", ">> nothing to consume !")
+        elif self.is_playing:
+            debug("_consume", "(PLAYING)", ">> queued")
         else:
-            debug("_consume (UNKOWN) >> ?")
+            debug("_consume", "(UNKOWN)", ">> ?")
 
     # --------------------------------------------------------------------------
 
@@ -461,7 +313,7 @@ class Player:
     async def play(self, req, top=False):
         self.queue.enqueue(req, top=top)
         await self.put(self._consume)
-        return self.state is GiruState.IDLE
+        return self.is_idle
 
     @log_called_function
     async def disconnect(self):
@@ -470,27 +322,25 @@ class Player:
 
     @log_called_function
     async def skip(self) -> bool:
-        skiped = self.voice and self.state is GiruState.PLAYING
+        skiped = self.voice and self.is_playing
         if skiped:
-            self.queue.flag = PlayerFlag.SKIP
+            self.queue.set_skip()
             self.voice.stop()
         return skiped
 
     @log_called_function
     async def loop(self) -> bool:
-        enabled: bool = self.queue.toggle_option(PlayerModifier.LOOP)
-        return enabled
+        return self.queue.toggle_loop()
 
     @log_called_function
     async def loopqueue(self) -> bool:
-        enabled: bool = self.queue.toggle_option(PlayerModifier.LOOP_QUEUE)
-        return enabled
+        return self.queue.toggle_loopqueue()
 
     @log_called_function
     async def replay(self) -> bool:
-        replayed = self.voice and self.state is GiruState.PLAYING
+        replayed = self.voice and self.is_playing
         if replayed:
-            self.queue.flag = PlayerFlag.REPLAY
+            self.queue.set_replay()
             self.voice.stop()
         return replayed
 
@@ -526,13 +376,15 @@ class Music(commands.Cog):
         self.bot = bot
         self.guilds_player = {}
 
-    def get_player_and_locale(self, ctx):
-        guild_id = ctx.guild.id
+    def get_player(self, guild_id) -> Player:
         player = self.guilds_player.get(guild_id)
         if player is None:
             player = Player(self.bot, guild_id)
             self.guilds_player[guild_id] = player
-        return player, get_locale_from_context(ctx)
+        return player
+
+    def get_player_and_locale(self, ctx):
+        return self.get_player(ctx.guild.id), get_locale_from_context(ctx)
 
     # --------------------------------------------------------------------------
     # Song
@@ -572,7 +424,7 @@ class Music(commands.Cog):
 
         # playtop
         if skip:
-            embed = req.create_embed_queued(estimated="Now", position="Now")
+            embed = EmbedGenerator.play_queued(req, estimated="Now", position="Now")
             await ctx.send(embed=embed)
             if not now_played:  # skip if necessary
                 skiped: bool = await player.skip()
@@ -580,8 +432,10 @@ class Music(commands.Cog):
             await ctx.send(locale.notif_playing_now.format(req.title))
         else:
             estimated = player.estimated_next if top else player.estimated
-            position = 1 if top else player.waiting
-            embed = req.create_embed_queued(estimated=estimated, position=position)
+            position = 1 if top else player.queue.waiting
+            embed = EmbedGenerator.play_queued(
+                req, estimated=estimated, position=position
+            )
             await ctx.send(embed=embed)
         return True
 
@@ -610,7 +464,7 @@ class Music(commands.Cog):
     async def nowplaying(self, ctx):
         player, locale = self.get_player_and_locale(ctx)
         t = player.voice.source.progress
-        embed = player.queue.current.create_embed_np(t)
+        embed = EmbedGenerator.nowplaying(player.queue.current, t)
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["save", "yoink"])
@@ -711,15 +565,7 @@ class Music(commands.Cog):
             debug("disconnect", "not disconnected")
 
     # --------------------------------------------------------------------------
-
-    @commands.command()
-    async def test(self, ctx):
-        player, locale = self.get_player_and_locale(ctx)
-        from embed_generator import create_embed_queue
-
-        embed = create_embed_queue(ctx, player.queue)
-        await ctx.send(embed=embed)
-
+    # Queue
     # --------------------------------------------------------------------------
 
     @commands.command(aliases=["q"])
@@ -763,4 +609,13 @@ class Music(commands.Cog):
     @commands.command(aliases=["rmd", "rd", "drm"])
     async def removedupes(self, ctx):
         ...
+
+    # --------------------------------------------------------------------------
+
+    @commands.command()
+    async def test(self, ctx):
+        player, locale = self.get_player_and_locale(ctx)
+
+        embed = EmbedGenerator.queue(ctx, player.queue)
+        await ctx.send(embed=embed)
 
