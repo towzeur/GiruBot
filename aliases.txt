@@ -1,0 +1,66 @@
+# Song
+
+'!join' : ['summon']
+'!play' : ['p']
+'!playtop': ['pt', 'ptop']
+'!playskip': ['ps', 'pskip', 'playnow', 'pn']
+'!search' : ['find'] 
+'!soundcloud' : ['sc']
+'!nowplaying' : ['np']
+'!grab' : ['save', 'yoink']
+'!seek' : []
+'!rewind' : ['rwd']
+'!forward' : ['fwd']
+'!replay': []
+'!loop' : ['repeat']
+'!voteskip' : ['skip', 'next', 's']
+'!forceskip': ['fs', 'fskip']
+'!pause' : ['stop']
+'!resume' : ['re', 'res', 'continue']
+'!lyrics' : ['l', 'ly']
+'!disconnect' : ['dc', 'leave', 'dis']
+
+# Queue
+
+'!queue' : ['q']
+'!loopqueue' : ['qloop', 'lq', 'queueloop']
+'!move' : ['m', 'mv']
+'!skipto' : ['st']
+'!shuffle' : ['random']
+'!remove' : ['rm']
+'!clear' : ['cl']
+'!leavecleanup' : ['lc']
+'!removedupes' : ['rmd', 'rd', 'drm']
+
+# koodos
+
+'!sotd' : []
+'!playsotd' : ['psotd']
+'!sotw' : []
+'!playsotw' : ['psotw']
+'!sotm' : []
+'!playsotm' : ['psotm']
+
+# Settings
+
+'!settings' : ['setting']
+
+#  Premium
+
+'!effects' : ['effect']
+'!speed' : []
+'!bass' : []
+'!nightcore' : []
+'!slowed' : []
+'!volume' : ['vol']
+
+## Others
+
+'!prune' : ['purge', 'clean']
+'!invite' : ['links]
+'!info' : []
+'!shard' : ['debug']
+'!ping' : []
+'!aliases' : []
+
+
