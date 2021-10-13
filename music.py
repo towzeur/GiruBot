@@ -146,8 +146,7 @@ class Request:
                 # process -- whether to resolve all unresolved references (URLs, playlist items),
                 #    must be True for download to work.
                 # force_generic_extractor -- force using the generic extractor
-                info: dict = ytdl.extract_info(
-                    query,
+                ytdl_kwargs = dict(
                     download=False,
                     ie_key=None,
                     extra_info={},
@@ -156,6 +155,11 @@ class Request:
                 )
                 # ytdl.prepare_filename(info_dict)
                 # ytdl.download([url])
+
+                loop = asyncio.get_event_loop()
+                downloader = partial(cls.ytdl.extract_info, query, **ytdl_kwargs)
+                info: dict = await loop.run_in_executor(None, downloader)
+
         except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
             debug("from_youtube", "exception", e)
             return None
@@ -250,20 +254,17 @@ class Player:
             print("[run] finally")
 
     # -------
+    @log_called_function
+    def _after(self, error):
+        print("after", error)
+        self.queue.next()
+        self.set_idle()
+        self.queue.unset_flag()
+        self.q.put_nowait(self._consume)
 
     @log_called_function
     async def _play_now(self, req):
-        print(
-            "_play_now >> vid :", req.info["webpage_url"],
-        )
-
-        def after(error):
-            print("after", error)
-            self.queue.next()
-            self.set_idle()
-            self.queue.unset_flag()
-            self.q.put_nowait(self._consume)
-
+        print("_play_now >> vid :", req.info["webpage_url"])
         await self.join(req.message.author.voice.channel)
         audio = discord.FFmpegPCMAudio(
             req.url,
@@ -276,7 +277,7 @@ class Player:
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()
-        self.voice.play(player, after=after)
+        self.voice.play(player, after=self._after)
 
     @log_called_function
     async def _consume(self, play=False):
@@ -355,17 +356,17 @@ class Player:
 
     @log_called_function
     async def pause(self) -> bool:
-        paused = self.voice.is_playing()
-        if paused:
+        if self.voice.is_playing():
             self.voice.pause()
-        return paused
+            return True
+        return False
 
     @log_called_function
     async def resume(self) -> bool:
-        resumed = self.voice.is_paused()
-        if resumed:
+        if self.voice.is_paused():
             self.voice.resume()
-        return resumed
+            return True
+        return False
 
 
 # ------------------------------------------------------------------------------
@@ -512,7 +513,6 @@ class Music(commands.Cog):
     @commands.guild_only()
     async def voteskip(self, ctx):
         player, locale = self.get_player_and_locale(ctx)
-
         skiped: bool = await player.skip()
         if skiped:
             await ctx.send(locale.notif_skipped)
@@ -569,8 +569,11 @@ class Music(commands.Cog):
     # --------------------------------------------------------------------------
 
     @commands.command(aliases=["q"])
+    @commands.guild_only()
     async def queue(self, ctx):
-        ...
+        player, locale = self.get_player_and_locale(ctx)
+        embed = EmbedGenerator.queue(ctx, player.queue)
+        await ctx.send(embed=embed)
 
     @commands.command(aliases=["qloop", "lq", "queueloop"])
     async def loopqueue(self, ctx):
@@ -583,7 +586,7 @@ class Music(commands.Cog):
             await ctx.send(locale.notif_queue_loop_disabled)
 
     @commands.command(aliases=["m", "mv"])
-    async def move(self, ctx):
+    async def move(self, ctx, old_positon, new_position=None):
         ...
 
     @commands.command(aliases=["st"])
@@ -614,8 +617,5 @@ class Music(commands.Cog):
 
     @commands.command()
     async def test(self, ctx):
-        player, locale = self.get_player_and_locale(ctx)
-
-        embed = EmbedGenerator.queue(ctx, player.queue)
-        await ctx.send(embed=embed)
+        ...
 

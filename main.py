@@ -4,6 +4,7 @@ import traceback
 import sys
 
 from os import stat
+from discord.embeds import Embed
 from discord.ext import commands
 from dataclasses import dataclass
 
