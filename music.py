@@ -156,7 +156,7 @@ class Request:
         #    return None
 
         try:
-            with open("tmp_entries.txt", "w", encoding="utf-8") as f:
+            with open("tmp/tmp_entries.txt", "w", encoding="utf-8") as f:
                 pprint(info, stream=f)
         except Exception as e:
             eprint(e)
