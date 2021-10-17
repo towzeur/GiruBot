@@ -155,7 +155,6 @@ class Request:
         #    debug("from_youtube", "exception", e)
         #    return None
 
-        eprint("test")
         try:
             with open("tmp_entries.txt", "w", encoding="utf-8") as f:
                 pprint(info, stream=f)

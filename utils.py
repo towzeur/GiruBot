@@ -10,7 +10,10 @@ from threading import Lock, Thread
 
 
 def eprint(*args, **kwargs):
-    cprint(*args, "red", attrs=["bold"], file=sys.stderr, **kwargs)
+    sep = kwargs.get("sep", " ")
+    message = sep.join(args)
+    color = "red"
+    cprint(message, color, attrs=["bold"], file=sys.stderr, **kwargs)
 
 
 def debug(*args, **kwargs):
