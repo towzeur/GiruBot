@@ -1,15 +1,22 @@
-from functools import wraps
-from threading import Lock, Thread
 import glob
 import json
-
 import re
 import time
+import sys
+
+from termcolor import colored, cprint
+from functools import wraps
+from threading import Lock, Thread
+
+
+def eprint(*args, **kwargs):
+    cprint(*args, "red", attrs=["bold"], file=sys.stderr, **kwargs)
 
 
 def debug(*args, **kwargs):
     t_format = "%H:%M:%S"
-    print(f"[{time.strftime(t_format)}]", *args, **kwargs)
+    msg = f"[{time.strftime(t_format)}]"
+    print(msg, *args, **kwargs)
 
 
 def convert_to_youtube_time_format(total_seconds: float) -> str:

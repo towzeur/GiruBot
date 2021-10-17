@@ -1,10 +1,8 @@
-from msvcrt import putch
 import discord
 import asyncio
 import youtube_dl
 
 from discord.ext import commands
-from re import S
 from enum import Enum
 from pprint import pprint
 from dataclasses import dataclass
@@ -19,7 +17,7 @@ from options import (
     FFMPEG_OPTIONS,
     DEFAULT_VOLUME,
 )
-from utils import log_called_function, debug
+from utils import log_called_function, debug, eprint
 from embed_generator import EmbedGenerator
 from player_queue import PlayerQueue
 
@@ -121,51 +119,50 @@ class Request:
     url: str
     duration: float
 
-    ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
-
     @classmethod
-    async def from_youtube(cls, query, message):
-        # with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ydl:
-        #    info = ydl.extract_info(query, download=False)
+    async def from_youtube(cls, query, message, blocking=False):
 
-        # ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
-        if False:
-            loop = asyncio.get_event_loop()
-            downloader = partial(cls.ytdl.extract_info, query, download=False)
-            # , process=False)
-            info = await loop.run_in_executor(None, downloader)
-        try:
-            with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ytdl:
-                ytdl.cache.remove()
-                # Arguments:
-                # url -- URL to extract
-                # Keyword arguments:
-                # download -- whether to download videos during extraction
-                # ie_key -- extractor key hint
-                # extra_info -- dictionary containing the extra values to add to each result
-                # process -- whether to resolve all unresolved references (URLs, playlist items),
-                #    must be True for download to work.
-                # force_generic_extractor -- force using the generic extractor
-                ytdl_kwargs = dict(
-                    download=False,
-                    ie_key=None,
-                    extra_info={},
-                    process=True,
-                    force_generic_extractor=False,
-                )
-                # ytdl.prepare_filename(info_dict)
-                # ytdl.download([url])
+        ytdl_kwargs = dict(
+            download=False,
+            ie_key=None,
+            extra_info={},
+            process=True,
+            force_generic_extractor=False,
+        )
 
-                loop = asyncio.get_event_loop()
-                downloader = partial(cls.ytdl.extract_info, query, **ytdl_kwargs)
+        with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ytdl:
+            # Arguments:
+            # url -- URL to extract
+            # Keyword arguments:
+            # download -- whether to download videos during extraction
+            # ie_key -- extractor key hint
+            # extra_info -- dictionary containing the extra values to add to each result
+            # process -- whether to resolve all unresolved references (URLs, playlist items),
+            #    must be True for download to work.
+            # force_generic_extractor -- force using the generic extractor
+            ytdl.cache.remove()
+            # ytdl.prepare_filename(info_dict)
+            # ytdl.download([url])
+            if blocking:
+                info: dict = ytdl.extract_info(query, **ytdl_kwargs)
+            else:
+                downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
+                # loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 info: dict = await loop.run_in_executor(None, downloader)
 
-        except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
-            debug("from_youtube", "exception", e)
-            return None
+        # except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
+        #    debug("from_youtube", "exception", e)
+        #    return None
 
-        with open("tmp_entries.txt", "w", encoding="utf-8") as f:
-            pprint(info, stream=f)
+        eprint("test")
+        try:
+            with open("tmp_entries.txt", "w", encoding="utf-8") as f:
+                pprint(info, stream=f)
+        except Exception as e:
+            eprint(e)
+            print("**" * 20)
+            # return None
 
         # this value is not an exact match, but it's a good approximation
         entry = info["entries"][0] if "entries" in info else info
@@ -196,11 +193,11 @@ class Player:
         # ---
 
         self.q = asyncio.Queue()
-        self.event_loop = asyncio.get_event_loop()
         self.locale = self.bot.get_cog("Locales")
         self.voice: discord.VoiceClient = None
 
-        self.event_loop.create_task(self.run())
+        event_loop = asyncio.get_event_loop()
+        event_loop.create_task(self.run())
 
     # --------------------------------------------------------------------------
 
@@ -277,10 +274,19 @@ class Player:
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()
-        self.voice.play(player, after=self._after)
+        self.voice.stop()
+
+        try:
+            self.voice.play(player, after=self._after)
+        except discord.ClientException:
+            eprint("ClientException – Already playing audio or not connected")
+        except TypeError:
+            eprint("Source is not a AudioSource or after is not a callable")
+        except discord.OpusNotLoaded:
+            eprint("Source is not opus encoded and opus is not loaded")
 
     @log_called_function
-    async def _consume(self, play=False):
+    async def _consume(self):
         debug("_consume", "flag", self.queue.flag, "option", self.queue.modifiers)
         if self.is_idle:
             debug("_consume", "(IDLE)", ">> now playing")
