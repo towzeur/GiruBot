@@ -7,6 +7,7 @@ from enum import Enum
 from pprint import pprint
 from dataclasses import dataclass
 from functools import partial
+from concurrent.futures import ThreadPoolExecutor
 
 from locales import Locales
 from options import (
@@ -149,7 +150,8 @@ class Request:
                 downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
                 # loop = asyncio.get_event_loop()
                 loop = asyncio.get_running_loop()
-                info: dict = await loop.run_in_executor(None, downloader)
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    info: dict = await loop.run_in_executor(pool, downloader)
 
         # except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
         #    debug("from_youtube", "exception", e)
@@ -251,7 +253,7 @@ class Player:
 
     # -------
     @log_called_function
-    def _after(self, error):
+    def _after(self, error=None):
         print("after", error)
         self.queue.next()
         self.set_idle()
@@ -262,14 +264,19 @@ class Player:
     async def _play_now(self, req):
         print("_play_now >> vid :", req.info["webpage_url"])
         await self.join(req.message.author.voice.channel)
-        audio = discord.FFmpegPCMAudio(
-            req.url,
-            executable=FFMPEG_EXECUTABLE,
-            pipe=False,
-            stderr=None,  # subprocess.PIPE
-            before_options=FFMPEG_BEFORE_OPTIONS,  # "-nostdin",
-            options=FFMPEG_OPTIONS,
-        )
+        try:
+            audio = discord.FFmpegPCMAudio(
+                req.url,
+                executable=FFMPEG_EXECUTABLE,
+                pipe=False,
+                stderr=None,  # subprocess.PIPE
+                before_options=FFMPEG_BEFORE_OPTIONS,  # "-nostdin",
+                options=FFMPEG_OPTIONS,
+            )
+        except discord.ClientException:
+            eprint("_play_now", "The subprocess failed to be created")
+            return
+
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()

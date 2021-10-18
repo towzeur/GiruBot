@@ -18,7 +18,7 @@ YTDL_OPTIONS = {
 
 # FFMPEG -----------------------------------------------------------------------
 
-FFMPEG_EXECUTABLE = "ffmpeg"  # "./ffmpeg.exe"
+FFMPEG_EXECUTABLE = "bin/ffmpeg.exe"
 
 FFMPEG_BEFORE_OPTIONS = " ".join(
     ["-reconnect 1", "-reconnect_streamed 1", "-reconnect_delay_max 5", "-nostdin",]

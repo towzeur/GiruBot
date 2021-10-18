@@ -3,15 +3,9 @@ import json
 import traceback
 import sys
 
-from os import stat
-from discord.embeds import Embed
 from discord.ext import commands
-from dataclasses import dataclass
 
-from utils import loading_bar, debug
-from options import LOCALE_DEFAULT, LOCALE_FILE_TEMPLATE
-
-# cog
+from utils import debug, eprint
 from music import Music
 from locales import Locales
 
@@ -49,9 +43,9 @@ class Giru(commands.Bot):
     # @bot.event
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.errors.CheckFailure):
-            debug(error)
+            eprint(error)
         elif isinstance(error, commands.errors.CommandNotFound):
-            debug("CommandNotFound", error, commands.errors.CommandNotFound)
+            eprint("CommandNotFound", error, commands.errors.CommandNotFound)
         else:
             print(f"Ignoring exception in command {ctx.command}:", file=sys.stderr)
             traceback.print_exception(
