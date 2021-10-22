@@ -51,9 +51,6 @@ class PlayerQueue:
     def set_replay(self):
         self.flag = PlayerQueue.Flag.REPLAY
 
-    def unset_flag(self):
-        self.flag = None
-
     # --------------------------------------------------------------------------
 
     def toggle_modifier(self, option: "PlayerQueue.Modifier"):
@@ -84,8 +81,10 @@ class PlayerQueue:
         # flags have a higher priority
         if self.flag is PlayerQueue.Flag.SKIP:
             self.dequeue(idx=self.cursor)
+            self.flag = None
             return self.current
         elif self.flag is PlayerQueue.Flag.REPLAY:
+            self.flag = None
             return self.current
 
         # optons have a lower priority

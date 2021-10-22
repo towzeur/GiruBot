@@ -11,7 +11,7 @@ from threading import Lock, Thread
 
 def eprint(*args, **kwargs):
     sep = kwargs.get("sep", " ")
-    message = sep.join(args)
+    message = sep.join(map(str, args))
     color = "red"
     cprint(message, color, attrs=["bold"], file=sys.stderr, **kwargs)
 

@@ -1,6 +1,7 @@
 import discord
 import asyncio
 import youtube_dl
+import sys
 
 from discord.ext import commands
 from enum import Enum
@@ -70,7 +71,7 @@ class Check:
         #    return False
 
         player, locale = ctx.bot.get_cog("Music").get_player_and_locale(ctx)
-        if not player.is_playing:
+        if not player.PLAYING:
             await ctx.send(locale.error_nothing_playing)
             return False
 
@@ -142,35 +143,45 @@ class Request:
             #    must be True for download to work.
             # force_generic_extractor -- force using the generic extractor
             ytdl.cache.remove()
+            downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
+            try:
+                if blocking:
+                    debug("from_youtube, blocking")
+                    info: dict = downloader()
+                else:
+                    debug("from_youtube, non blocking")
+                    loop = asyncio.get_running_loop()
+                    with ThreadPoolExecutor(max_workers=1) as pool:
+                        info: dict = await loop.run_in_executor(pool, downloader)
+            except Exception as e:
+                eprint(e)
+
             # ytdl.prepare_filename(info_dict)
             # ytdl.download([url])
-            if blocking:
-                info: dict = ytdl.extract_info(query, **ytdl_kwargs)
-            else:
-                downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
-                # loop = asyncio.get_event_loop()
-                loop = asyncio.get_running_loop()
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    info: dict = await loop.run_in_executor(pool, downloader)
 
         # except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
         #    debug("from_youtube", "exception", e)
         #    return None
 
-        try:
-            with open("tmp/tmp_entries.txt", "w", encoding="utf-8") as f:
-                pprint(info, stream=f)
-        except Exception as e:
-            eprint(e)
-            print("**" * 20)
-            # return None
+        if False:
+            try:
+                with open("tmp/tmp_entries.txt", "w", encoding="utf-8") as f:
+                    pprint(info, stream=f)
+            except Exception as e:
+                eprint(e)
+                print("**" * 20)
+                # return None
 
         # this value is not an exact match, but it's a good approximation
         entry = info["entries"][0] if "entries" in info else info
 
-        # pprint(info)
         return cls(
-            message, query, entry, entry["title"], entry["url"], entry["duration"]
+            message=message,
+            query=query,
+            info=entry,
+            title=entry["title"],
+            url=entry["url"],
+            duration=entry["duration"],
         )
 
 
@@ -197,24 +208,18 @@ class Player:
         self.locale = self.bot.get_cog("Locales")
         self.voice: discord.VoiceClient = None
 
-        event_loop = asyncio.get_event_loop()
-        event_loop.create_task(self.run())
+        # event_loop = asyncio.get_event_loop()
+        # event_loop.create_task(self.run())
 
     # --------------------------------------------------------------------------
 
     @property
-    def is_playing(self) -> bool:
+    def PLAYING(self) -> bool:
         return self.state is Player.State.PLAYING
 
-    def set_playing(self):
-        self.state = Player.State.PLAYING
-
     @property
-    def is_idle(self) -> bool:
+    def IDLE(self):
         return self.state is Player.State.IDLE
-
-    def set_idle(self):
-        self.state = Player.State.IDLE
 
     # -------
 
@@ -239,26 +244,26 @@ class Player:
     async def put(self, callback, *args, **kwargs):
         await self.q.put(partial(callback, *args, **kwargs))
 
-    @log_called_function
-    async def run(self):
-        try:
-            while True:
-                callback = await self.q.get()
-                print("**callback**")
-                await callback()
-        except Exception as e:
-            print("[run] Exception", e)
-        finally:
-            print("[run] finally")
+    # @log_called_function
+    # async def run(self):
+    #    try:
+    #        while True:
+    #            callback = await self.q.get()
+    #            print("**callback**")
+    #            await callback()
+    #    except Exception as e:
+    #        print("[run] Exception", e)
+    #    finally:
+    #        print("[run] finally")
 
     # -------
     @log_called_function
     def _after(self, error=None):
-        print("after", error)
+        if error:
+            eprint("_after ERROR", error)
+        self.state = Player.State.IDLE
         self.queue.next()
-        self.set_idle()
-        self.queue.unset_flag()
-        self.q.put_nowait(self._consume)
+        self.bot.loop.create_task(self._consume())
 
     @log_called_function
     async def _play_now(self, req):
@@ -269,7 +274,7 @@ class Player:
                 req.url,
                 executable=FFMPEG_EXECUTABLE,
                 pipe=False,
-                stderr=None,  # subprocess.PIPE
+                stderr=sys.stdout,  # None,  # subprocess.PIPE
                 before_options=FFMPEG_BEFORE_OPTIONS,  # "-nostdin",
                 options=FFMPEG_OPTIONS,
             )
@@ -280,7 +285,7 @@ class Player:
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()
-        self.voice.stop()
+        # self.voice.stop()
 
         try:
             self.voice.play(player, after=self._after)
@@ -293,19 +298,21 @@ class Player:
 
     @log_called_function
     async def _consume(self):
-        debug("_consume", "flag", self.queue.flag, "option", self.queue.modifiers)
-        if self.is_idle:
+        debug("_consume", "flag", self.queue.flag, "modifiers", self.queue.modifiers)
+        if self.IDLE:
             debug("_consume", "(IDLE)", ">> now playing")
             if self.queue.current:
                 debug("_consume >> playing now")
-                self.set_playing()
+                self.state = Player.State.PLAYING
                 await self._play_now(self.queue.current)
+                return True
             else:
                 debug("_consume", "(IDLE)", ">> nothing to consume !")
-        elif self.is_playing:
+        elif self.PLAYING:
             debug("_consume", "(PLAYING)", ">> queued")
         else:
             debug("_consume", "(UNKOWN)", ">> ?")
+        return False
 
     # --------------------------------------------------------------------------
 
@@ -324,9 +331,22 @@ class Player:
 
     @log_called_function
     async def play(self, req, top=False):
+        """ 
+        play the given req
+        return False if enqueued
+        """
         self.queue.enqueue(req, top=top)
-        await self.put(self._consume)
-        return self.is_idle
+        # await self.put(self._consume)
+        # eprint("BEFORE await self._consume()", self.PLAYING)
+        played_now: bool = await self._consume()
+        # eprint(
+        #    "AFTER await self._consume()",
+        #   "self.PLAYING",
+        #   self.PLAYING,
+        #   "played_now",
+        #   played_now,
+        # )
+        return played_now
 
     @log_called_function
     async def disconnect(self):
@@ -335,7 +355,7 @@ class Player:
 
     @log_called_function
     async def skip(self) -> bool:
-        skiped = self.voice and self.is_playing
+        skiped = self.voice and self.PLAYING
         if skiped:
             self.queue.set_skip()
             self.voice.stop()
@@ -351,7 +371,7 @@ class Player:
 
     @log_called_function
     async def replay(self) -> bool:
-        replayed = self.voice and self.is_playing
+        replayed = self.voice and self.PLAYING
         if replayed:
             self.queue.set_replay()
             self.voice.stop()
@@ -368,7 +388,7 @@ class Player:
 
     @log_called_function
     async def pause(self) -> bool:
-        if self.voice.is_playing():
+        if self.voice.PLAYING():
             self.voice.pause()
             return True
         return False
@@ -433,15 +453,15 @@ class Music(commands.Cog):
             return False
 
         # play the song
-        now_played: bool = await player.play(req, top=top)
+        played_now: bool = await player.play(req, top=top)
 
         # playtop
         if skip:
             embed = EmbedGenerator.play_queued(req, estimated="Now", position="Now")
             await ctx.send(embed=embed)
-            if not now_played:  # skip if necessary
+            if not played_now:  # skip if necessary
                 skiped: bool = await player.skip()
-        elif now_played:
+        elif played_now:
             await ctx.send(locale.notif_playing_now.format(req.title))
         else:
             estimated = player.estimated_next if top else player.estimated
