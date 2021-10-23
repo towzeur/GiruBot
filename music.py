@@ -388,7 +388,7 @@ class Player:
 
     @log_called_function
     async def pause(self) -> bool:
-        if self.voice.PLAYING():
+        if self.voice.is_playing():
             self.voice.pause()
             return True
         return False
@@ -454,22 +454,25 @@ class Music(commands.Cog):
 
         # play the song
         played_now: bool = await player.play(req, top=top)
+        if skip and not played_now:
+            skiped: bool = await player.skip()
 
-        # playtop
-        if skip:
+        # create the content or embed
+        content, embed = None, None
+        if skip:  # playskip
             embed = EmbedGenerator.play_queued(req, estimated="Now", position="Now")
-            await ctx.send(embed=embed)
-            if not played_now:  # skip if necessary
-                skiped: bool = await player.skip()
-        elif played_now:
-            await ctx.send(locale.notif_playing_now.format(req.title))
-        else:
-            estimated = player.estimated_next if top else player.estimated
-            position = 1 if top else player.queue.waiting
+        elif played_now:  # play
+            content = locale.notif_playing_now.format(req.title)
+        elif top:  # queued top
             embed = EmbedGenerator.play_queued(
-                req, estimated=estimated, position=position
+                req, estimated=player.estimated_next, position=1
             )
-            await ctx.send(embed=embed)
+        else:  # queued
+            embed = EmbedGenerator.play_queued(
+                req, estimated=player.estimated, position=player.queue.waiting
+            )
+
+        await ctx.send(content=content, embed=embed)
         return True
 
     @commands.command(aliases=["pt", "ptop"])
