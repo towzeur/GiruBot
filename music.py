@@ -92,11 +92,11 @@ class AudioSourceTracked(discord.AudioSource):
             self.count += 1
         return data
 
-    def is_opus(self) -> bool:
-        try:
-            return self._source.is_opus()
-        except:
-            return True
+    # def is_opus(self) -> bool:
+    #    try:
+    #        return self._source.is_opus()
+    #    except:
+    #        return True
 
     def cleanup(self):
         self._source.cleanup()

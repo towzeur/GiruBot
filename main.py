@@ -8,6 +8,7 @@ from discord.ext import commands
 from utils import debug, eprint
 from music import Music
 from locales import Locales
+from others import Others
 
 
 class Giru(commands.Bot):
@@ -67,4 +68,6 @@ if __name__ == "__main__":
     bot = Giru(command_prefix="!")
     bot.add_cog(Locales(bot))
     bot.add_cog(Music(bot))
+    bot.add_cog(Others(bot))
     bot.run(secret["TOKEN"])
+

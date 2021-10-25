@@ -151,3 +151,26 @@ class EmbedGenerator:
         embed.add_field(name="\rx", value=line, inline=False)
         # return "\u200B"
         return embed
+
+    @staticmethod
+    def ping(
+        api_response_time: int, message_response_time: int, websocket_heartbeat: int
+    ):
+        """
+        API response time
+        Message response time
+        Websocket heartbeat
+        """
+        embed = discord.Embed(color=0x00FF00)
+        embed.add_field(
+            name=VOID_TOKEN, value=f":hourglass: {api_response_time}ms", inline=False
+        )
+        embed.add_field(
+            name=VOID_TOKEN,
+            value=f":stopwatch: {message_response_time}ms",
+            inline=False,
+        )
+        embed.add_field(
+            name=VOID_TOKEN, value=f":heartbeat: {websocket_heartbeat}ms", inline=False
+        )
+        return embed

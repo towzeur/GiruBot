@@ -11,7 +11,7 @@ YTDL_OPTIONS = {
     "logtostderr": False,
     "quiet": True,
     "no_warnings": True,
-    "default_search": "ytsearch",  # "auto"
+    "default_search": "auto",  # "ytsearch"
     "source_address": "0.0.0.0",  # bind to ipv4 since ipv6 addresses cause issues sometimes
     "usenetrc": True,
 }
