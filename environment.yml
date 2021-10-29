@@ -1,9 +1,9 @@
 name: giru
 channels:
   - defaults
+  - conda-forge
 dependencies:
-  - pip
-  - pytz
-  - numpy
-  - black
-  - ipykernel
+  - discord.py
+  - pynacl
+  - youtube-dl
+  - termcolor

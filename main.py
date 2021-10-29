@@ -76,5 +76,9 @@ if __name__ == "__main__":
     bot.add_cog(Locales(bot))
     bot.add_cog(Music(bot))
     bot.add_cog(Others(bot))
-    bot.run(secret["TOKEN"])
+
+    try:
+        bot.run(secret["TOKEN"])
+    except discord.errors.LoginFailure:
+        eprint("Improper token has been passed.")
 

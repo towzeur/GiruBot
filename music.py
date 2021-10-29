@@ -122,7 +122,7 @@ class Request:
     duration: float
 
     @classmethod
-    async def from_youtube(cls, query, message, blocking=False):
+    async def from_youtube(cls, query, message, blocking=True):
 
         ytdl_kwargs = dict(
             download=False,
@@ -144,13 +144,13 @@ class Request:
             # force_generic_extractor -- force using the generic extractor
             ytdl.cache.remove()
             downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
+            loop = asyncio.get_running_loop()
             try:
                 if blocking:
                     debug("from_youtube, blocking")
-                    info: dict = downloader()
+                    info: dict = await loop.run_in_executor(None, downloader)
                 else:
                     debug("from_youtube, non blocking")
-                    loop = asyncio.get_running_loop()
                     with ThreadPoolExecutor(max_workers=1) as pool:
                         info: dict = await loop.run_in_executor(pool, downloader)
             except Exception as e:
