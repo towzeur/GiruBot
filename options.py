@@ -1,3 +1,20 @@
+class MyLogger(object):
+    def debug(self, msg):
+        print("+ debug", msg)
+
+    def warning(self, msg):
+        print("+ warning", msg)
+
+    def error(self, msg):
+        print("+ error", msg)
+
+
+def my_hook(d):
+    print("+", d["status"])
+    if d["status"] == "finished":
+        print("Done downloading, now converting ...")
+
+
 # YTDL_OPTIONS -----------------------------------------------------------------
 
 YTDL_OPTIONS = {
@@ -14,6 +31,9 @@ YTDL_OPTIONS = {
     "default_search": "auto",  # "ytsearch"
     "source_address": "0.0.0.0",  # bind to ipv4 since ipv6 addresses cause issues sometimes
     "usenetrc": True,
+    #
+    "logger": MyLogger(),
+    "progress_hooks": [my_hook],
 }
 
 # FFMPEG -----------------------------------------------------------------------

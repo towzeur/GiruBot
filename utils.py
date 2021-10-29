@@ -3,10 +3,18 @@ import json
 import re
 import time
 import sys
+import io
 
 from termcolor import colored, cprint
 from functools import wraps
 from threading import Lock, Thread
+
+
+def sprint(*args, color="red", **kwargs):
+    sio = io.StringIO()
+    print(*args, **kwargs, file=sio)
+    message = sio.getvalue()
+    cprint(message, color)
 
 
 def eprint(*args, **kwargs):
