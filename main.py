@@ -54,11 +54,6 @@ class Giru(commands.Bot):
             )
 
     async def on_message(self, message):
-
-        if "tiananmen" in message.content.lower():
-            msg = f"{message.author.mention} :warning: -999 999 social credit points :warning:"
-            await message.channel.send(msg)
-
         await self.process_commands(message)
 
     #    # FILTER OWN SELF MESSAGE

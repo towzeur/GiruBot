@@ -8,7 +8,8 @@ from enum import Enum
 from pprint import pprint
 from dataclasses import dataclass
 from functools import partial
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from time import perf_counter_ns
 
 from locales import Locales
 from options import (
@@ -110,6 +111,32 @@ class AudioSourceTracked(discord.AudioSource):
 # ------------------------------------------------------------------------------
 
 
+class Downloader:
+    @staticmethod
+    def get_info(query):
+        ytdl_kwargs = dict(
+            download=False,
+            ie_key=None,
+            extra_info={},
+            process=True,
+            force_generic_extractor=False,
+        )
+        with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ytdl:
+            ytdl.cache.remove()
+            try:
+                info = ytdl.extract_info(query, **ytdl_kwargs)
+                # ytdl.prepare_filename(info_dict)
+                # ytdl.download([url])
+                return info
+            except (
+                youtube_dl.utils.ExtractorError,
+                youtube_dl.utils.DownloadError,
+            ) as e:
+                debug("from_youtube", "exception", e)
+                eprint(e)
+        return None
+
+
 @dataclass
 class Request:
     """Class for keeping track of an item in inventory."""
@@ -122,46 +149,27 @@ class Request:
     duration: float
 
     @classmethod
-    async def from_youtube(cls, query, message, blocking=True):
+    async def from_youtube(cls, query, message, blocking=False):
+        t0 = perf_counter_ns()
 
-        ytdl_kwargs = dict(
-            download=False,
-            ie_key=None,
-            extra_info={},
-            process=True,
-            force_generic_extractor=False,
-        )
-
-        with youtube_dl.YoutubeDL(YTDL_OPTIONS) as ytdl:
-            # Arguments:
-            # url -- URL to extract
-            # Keyword arguments:
-            # download -- whether to download videos during extraction
-            # ie_key -- extractor key hint
-            # extra_info -- dictionary containing the extra values to add to each result
-            # process -- whether to resolve all unresolved references (URLs, playlist items),
-            #    must be True for download to work.
-            # force_generic_extractor -- force using the generic extractor
-            ytdl.cache.remove()
-            downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
+        if blocking:
+            debug("from_youtube, blocking")
+            # info = Downloader.get_info(query)
+            loop_bot = asyncio.get_running_loop()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            info = loop.run_until_complete(None, Downloader.get_info, query)
+            # info = await loop.run_in_executor(None, Downloader.get_info, query)
+            # asyncio.set_event_loop(loop_bot)
+            # loop.close()
+        else:
+            debug("from_youtube, non blocking")
             loop = asyncio.get_running_loop()
-            try:
-                if blocking:
-                    debug("from_youtube, blocking")
-                    info: dict = await loop.run_in_executor(None, downloader)
-                else:
-                    debug("from_youtube, non blocking")
-                    with ThreadPoolExecutor(max_workers=1) as pool:
-                        info: dict = await loop.run_in_executor(pool, downloader)
-            except Exception as e:
-                eprint(e)
+            with ProcessPoolExecutor(max_workers=1) as executor:
+                info = await loop.run_in_executor(executor, Downloader.get_info, query)
 
-            # ytdl.prepare_filename(info_dict)
-            # ytdl.download([url])
-
-        # except (youtube_dl.utils.ExtractorError, youtube_dl.utils.DownloadError) as e:
-        #    debug("from_youtube", "exception", e)
-        #    return None
+        t1 = perf_counter_ns()
+        eprint("t1", (t1 - t0) * 1e-6)
 
         if False:
             try:
@@ -173,7 +181,12 @@ class Request:
                 # return None
 
         # this value is not an exact match, but it's a good approximation
-        entry = info["entries"][0] if "entries" in info else info
+        if "entries" in info:
+            print("@from_youtube", 'entry = info["entries"][0]', len(info["entries"]))
+            entry = info["entries"][0]
+        else:
+            print("@from_youtube", "entry = info")
+            entry = info
 
         return cls(
             message=message,
@@ -204,7 +217,7 @@ class Player:
 
         # ---
 
-        self.q = asyncio.Queue()
+        # self.q = asyncio.Queue()
         self.locale = self.bot.get_cog("Locales")
         self.voice: discord.VoiceClient = None
 
@@ -239,24 +252,6 @@ class Player:
         return self.queue.current.duration - self.voice.source.progress
 
     # -------
-
-    @log_called_function
-    async def put(self, callback, *args, **kwargs):
-        await self.q.put(partial(callback, *args, **kwargs))
-
-    # @log_called_function
-    # async def run(self):
-    #    try:
-    #        while True:
-    #            callback = await self.q.get()
-    #            print("**callback**")
-    #            await callback()
-    #    except Exception as e:
-    #        print("[run] Exception", e)
-    #    finally:
-    #        print("[run] finally")
-
-    # -------
     @log_called_function
     def _after(self, error=None):
         if error:
@@ -266,15 +261,16 @@ class Player:
         self.bot.loop.create_task(self._consume())
 
     @log_called_function
-    async def _play_now(self, req):
+    def _play_now(self, req):
         print("_play_now >> vid :", req.info["webpage_url"])
-        await self.join(req.message.author.voice.channel)
+
+        # create an Audio
         try:
             audio = discord.FFmpegPCMAudio(
                 req.url,
                 executable=FFMPEG_EXECUTABLE,
                 pipe=False,
-                stderr=sys.stdout,  # None,  # subprocess.PIPE
+                stderr=None,  # sys.stdout # None # subprocess.PIPE
                 before_options=FFMPEG_BEFORE_OPTIONS,  # "-nostdin",
                 options=FFMPEG_OPTIONS,
             )
@@ -282,11 +278,12 @@ class Player:
             eprint("_play_now", "The subprocess failed to be created")
             return
 
+        # create a player
         player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
         player = AudioSourceTracked(player)
         player.read()
-        # self.voice.stop()
 
+        # play it
         try:
             self.voice.play(player, after=self._after)
         except discord.ClientException:
@@ -301,10 +298,12 @@ class Player:
         debug("_consume", "flag", self.queue.flag, "modifiers", self.queue.modifiers)
         if self.IDLE:
             debug("_consume", "(IDLE)", ">> now playing")
-            if self.queue.current:
+            req = self.queue.current
+            if req is not None:
                 debug("_consume >> playing now")
                 self.state = Player.State.PLAYING
-                await self._play_now(self.queue.current)
+                await self.join(req.message.author.voice.channel)
+                self._play_now(req)
                 return True
             else:
                 debug("_consume", "(IDLE)", ">> nothing to consume !")
