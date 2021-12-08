@@ -7,3 +7,4 @@ dependencies:
   - pynacl
   - youtube-dl
   - termcolor
+  - python-dotenv
