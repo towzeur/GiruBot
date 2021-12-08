@@ -2,6 +2,9 @@ import discord
 import json
 import traceback
 import sys
+import os
+
+from dotenv import load_dotenv
 
 from discord.ext import commands
 
@@ -54,7 +57,11 @@ class Giru(commands.Bot):
             )
 
     async def on_message(self, message):
-        await self.process_commands(message)
+        if self.user.mentioned_in(message):
+            msg = f"{message.author.mention} hello !"
+            await message.channel.send(msg)
+        else:
+            await self.process_commands(message)
 
     #    # FILTER OWN SELF MESSAGE
     #    if message.author == self.user:
@@ -64,8 +71,9 @@ class Giru(commands.Bot):
 
 if __name__ == "__main__":
 
-    with open("secrets.json") as f:
-        secret = json.load(f)
+    # with open("secrets.json") as f:
+    #    secret = json.load(f)
+    load_dotenv(".env")
 
     bot = Giru(command_prefix="!")
     bot.add_cog(Locales(bot))
@@ -73,7 +81,7 @@ if __name__ == "__main__":
     bot.add_cog(Others(bot))
 
     try:
-        bot.run(secret["TOKEN"])
+        bot.run(os.environ["TOKEN"])
     except discord.errors.LoginFailure:
         eprint("Improper token has been passed.")
 
