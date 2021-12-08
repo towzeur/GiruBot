@@ -111,6 +111,6 @@ class PlayerQueue:
         except IndexError:
             return False
         else:
-            self.close.append(elt)
+            # self.close.append(elt)
             return True
 
