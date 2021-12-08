@@ -2,6 +2,8 @@ import discord
 import asyncio
 import youtube_dl
 import sys
+import multiprocessing
+import os
 
 from discord.ext import commands
 from enum import Enum
@@ -111,7 +113,45 @@ class AudioSourceTracked(discord.AudioSource):
 # ------------------------------------------------------------------------------
 
 
+def main():
+    read, write = os.pipe()
+    writer_process = multiprocessing.Process(target=writer, args=(write,))
+    writer_process.start()
+    asyncio.get_event_loop().run_until_complete(reader(read))
+
+
+async def reader(read):
+    pipe = os.fdopen(read, mode="r")
+
+    loop = asyncio.get_event_loop()
+    stream_reader = asyncio.StreamReader()
+
+    def protocol_factory():
+        return asyncio.StreamReaderProtocol(stream_reader)
+
+    transport, _ = await loop.connect_read_pipe(protocol_factory, pipe)
+    print(await stream_reader.readline())
+    transport.close()
+
+
+def writer(write):
+    os.write(write, b"Hello World\n")
+
+
+if __name__ == "__main__":
+    main()
+
+
 class Downloader:
+    ytdl_kwargs = dict(
+        download=False,
+        ie_key=None,
+        extra_info={},
+        process=True,
+        force_generic_extractor=False,
+    )
+    ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
+
     @staticmethod
     def get_info(query):
         ytdl_kwargs = dict(
@@ -149,19 +189,47 @@ class Request:
     duration: float
 
     @classmethod
-    async def from_youtube(cls, query, message, blocking=False):
+    async def from_youtube(cls, query, message, blocking=True):
         t0 = perf_counter_ns()
 
+        """
+        print("-" * 30)
+        ytdl_kwargs = dict(
+            download=False,
+            ie_key=None,
+            extra_info={},
+            process=True,
+            force_generic_extractor=False,
+        )
+        ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
+        loop = asyncio.get_running_loop()
+        info = await loop.run_in_executor(
+            None, lambda: ytdl.extract_info(query, **ytdl_kwargs)
+        )
+        print("+" * 30)
+        """
+
+        ytdl_kwargs = dict(
+            download=False,
+            ie_key=None,
+            extra_info={},
+            process=True,
+            force_generic_extractor=False,
+        )
+        ytdl = youtube_dl.YoutubeDL(YTDL_OPTIONS)
+
         if blocking:
+            print("-" * 30)
             debug("from_youtube, blocking")
             # info = Downloader.get_info(query)
-            loop_bot = asyncio.get_running_loop()
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            info = loop.run_until_complete(None, Downloader.get_info, query)
+            loop = asyncio.get_running_loop()
+            downloader = partial(ytdl.extract_info, query, **ytdl_kwargs)
+            info = await loop.run_in_executor(None, downloader)
+            print("+" * 30)
             # info = await loop.run_in_executor(None, Downloader.get_info, query)
             # asyncio.set_event_loop(loop_bot)
             # loop.close()
+
         else:
             debug("from_youtube, non blocking")
             loop = asyncio.get_running_loop()
@@ -169,7 +237,7 @@ class Request:
                 info = await loop.run_in_executor(executor, Downloader.get_info, query)
 
         t1 = perf_counter_ns()
-        eprint("t1", (t1 - t0) * 1e-6)
+        eprint("d1", (t1 - t0) * 1e-6)
 
         if False:
             try:
@@ -237,7 +305,7 @@ class Player:
     # -------
 
     @property
-    def estimated(self):
+    def estimated(self) -> float:
         """estimated times before the last queued request is played"""
         # total duration of the queue
         # minus remaining of the current track
@@ -247,7 +315,7 @@ class Player:
         return t
 
     @property
-    def estimated_next(self):
+    def estimated_next(self) -> float:
         """estimated time until the end of the current song"""
         return self.queue.current.duration - self.voice.source.progress
 
