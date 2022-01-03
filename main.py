@@ -14,6 +14,9 @@ from locales import Locales
 from others import Others
 
 
+from server import run
+run()
+
 class Giru(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

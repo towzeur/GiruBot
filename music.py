@@ -1,6 +1,6 @@
 import discord
 import asyncio
-import youtube_dl
+import yt_dlp as youtube_dl
 import sys
 import multiprocessing
 import os
