@@ -13,7 +13,6 @@ from music import Music
 from locales import Locales
 from others import Others
 
-
 from server import run
 run()
 
