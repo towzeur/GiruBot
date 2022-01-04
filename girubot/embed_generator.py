@@ -1,13 +1,14 @@
 import discord
 from math import floor, ceil
 
-from utils import convert_to_youtube_time_format, Markdown
-from options import QUEUE_MAX_DISPLAYED
-
-VOID_TOKEN = "\u200B"
+from .utils import convert_to_youtube_time_format, Markdown
+from .options import QUEUE_MAX_DISPLAYED
 
 
 class EmbedGenerator:
+
+    VOID_TOKEN = "\u200B"
+
     @staticmethod
     def queue(ctx, queue: "PlayerQueue", page=1):
 
@@ -44,12 +45,14 @@ class EmbedGenerator:
             )
 
             if queued > 0:
-                embed.add_field(name=VOID_TOKEN, value="__Up Next:__", inline=False)
+                embed.add_field(
+                    name=EmbedGenerator.VOID_TOKEN, value="__Up Next:__", inline=False
+                )
                 for n in range(displayed):
                     index = (queue.cursor + 1 + n) % len(queue)
                     req = queue.open[index]
                     embed.add_field(
-                        name=VOID_TOKEN,
+                        name=EmbedGenerator.VOID_TOKEN,
                         value="`{}.` {} | `{} Requested by: {}#{}`".format(
                             n + 1,
                             req.title,
@@ -65,7 +68,7 @@ class EmbedGenerator:
                     name="{} songs in queue | {} total length".format(
                         queued, convert_to_youtube_time_format(total_length)
                     ),
-                    value=VOID_TOKEN,
+                    value=EmbedGenerator.VOID_TOKEN,
                     inline=False,
                 )
 
@@ -163,14 +166,18 @@ class EmbedGenerator:
         """
         embed = discord.Embed(color=0x00FF00)
         embed.add_field(
-            name=VOID_TOKEN, value=f":hourglass: {api_response_time}ms", inline=False
+            name=EmbedGenerator.VOID_TOKEN,
+            value=f":hourglass: {api_response_time}ms",
+            inline=False,
         )
         embed.add_field(
-            name=VOID_TOKEN,
+            name=EmbedGenerator.VOID_TOKEN,
             value=f":stopwatch: {message_response_time}ms",
             inline=False,
         )
         embed.add_field(
-            name=VOID_TOKEN, value=f":heartbeat: {websocket_heartbeat}ms", inline=False
+            name=EmbedGenerator.VOID_TOKEN,
+            value=f":heartbeat: {websocket_heartbeat}ms",
+            inline=False,
         )
         return embed

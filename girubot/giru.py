@@ -1,20 +1,11 @@
 import discord
-import json
 import traceback
 import sys
-import os
-
-from dotenv import load_dotenv
 
 from discord.ext import commands
 
-from utils import debug, eprint
-from music import Music
-from locales import Locales
-from others import Others
+from .utils import debug, eprint
 
-from server import run
-run()
 
 class Giru(commands.Bot):
     def __init__(self, *args, **kwargs):
@@ -69,21 +60,4 @@ class Giru(commands.Bot):
     #    if message.author == self.user:
     #        return
     #    # debug("on_message", message)
-
-
-if __name__ == "__main__":
-
-    # with open("secrets.json") as f:
-    #    secret = json.load(f)
-    load_dotenv(".env")
-
-    bot = Giru(command_prefix="!")
-    bot.add_cog(Locales(bot))
-    bot.add_cog(Music(bot))
-    bot.add_cog(Others(bot))
-
-    try:
-        bot.run(os.environ["TOKEN"])
-    except discord.errors.LoginFailure:
-        eprint("Improper token has been passed.")
 

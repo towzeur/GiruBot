@@ -13,8 +13,8 @@ from functools import partial
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from time import perf_counter_ns
 
-from locales import Locales
-from options import (
+from .locales import Locales
+from .options import (
     YTDL_OPTIONS,
     FFMPEG_BEFORE_OPTIONS,
     FFMPEG_BEFORE_OPTIONS,
@@ -22,9 +22,9 @@ from options import (
     FFMPEG_OPTIONS,
     DEFAULT_VOLUME,
 )
-from utils import log_called_function, debug, eprint
-from embed_generator import EmbedGenerator
-from player_queue import PlayerQueue
+from .utils import log_called_function, debug, eprint
+from .embed_generator import EmbedGenerator
+from .player_queue import PlayerQueue
 
 youtube_dl.utils.bug_reports_message = lambda: ""
 

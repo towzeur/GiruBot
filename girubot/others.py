@@ -1,8 +1,9 @@
 import typing
-from datetime import datetime
 
+from datetime import datetime
 from discord.ext import commands
-from embed_generator import EmbedGenerator
+
+from .embed_generator import EmbedGenerator
 
 
 class Others(commands.Cog):

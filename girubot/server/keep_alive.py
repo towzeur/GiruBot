@@ -12,11 +12,12 @@ def keep_alive(func):
     return inner
 
 
-@server.route('/')
+@server.route("/")
 def home():
     return "Welcome to Juke Bot"
 
 
 @keep_alive
-def run():
-    server.run(host='0.0.0.0', port=9000)
+def run_server():
+    server.run(host="0.0.0.0", port=9000)
+

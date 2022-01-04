@@ -5,7 +5,7 @@ from discord.ext import commands
 from pathlib import Path
 from types import SimpleNamespace
 
-from options import LOCALE_DEFAULT, LOCALE_FILE_TEMPLATE
+from .options import LOCALE_DEFAULT, LOCALE_FILE_TEMPLATE
 
 
 class Locales(commands.Cog):
