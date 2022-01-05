@@ -4,7 +4,7 @@ import sys
 
 from discord.ext import commands
 
-from .utils import debug, eprint
+from girubot.utils import debug, eprint
 
 
 class Giru(commands.Bot):

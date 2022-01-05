@@ -3,7 +3,7 @@ import typing
 from datetime import datetime
 from discord.ext import commands
 
-from .embed_generator import EmbedGenerator
+from girubot import embeddings
 
 
 class Others(commands.Cog):
@@ -43,7 +43,7 @@ class Others(commands.Cog):
         # This could be referred to as the Discord WebSocket protocol latency.
         websocket_heartbeat: float = int(1000 * self.bot.latency)
 
-        embed = EmbedGenerator.ping(
+        embed = embeddings.ping(
             api_response_time, message_response_time, websocket_heartbeat
         )
         await ctx.send(embed=embed)

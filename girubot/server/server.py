@@ -1,7 +1,12 @@
 from flask import Flask
 from threading import Thread
 
-server = Flask(__name__)
+SERVER = Flask(__name__)
+
+
+@SERVER.route("/")
+def home():
+    return "Welcome to Juke Bot"
 
 
 def keep_alive(func):
@@ -12,12 +17,7 @@ def keep_alive(func):
     return inner
 
 
-@server.route("/")
-def home():
-    return "Welcome to Juke Bot"
-
-
 @keep_alive
 def run_server():
-    server.run(host="0.0.0.0", port=9000)
+    SERVER.run(host="0.0.0.0", port=9000)
 
