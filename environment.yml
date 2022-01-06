@@ -2,11 +2,13 @@ name: giru
 channels:
   - defaults
   - conda-forge
+  - anaconda
 dependencies:
   - termcolor
   - python-dotenv
-  - flask
+  - pip
   - pip:
+      - flask
       - yt-dlp
       - pynacl
       - discord.py[voice]

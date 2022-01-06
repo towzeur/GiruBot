@@ -61,9 +61,8 @@ class Player:
         self.bot.loop.create_task(self._consume())
 
     @log_called_function
-    def _play_now(self, req):
+    def _play_now(self, req) -> bool:
         print("_play_now >> vid :", req.info["webpage_url"])
-
         # create an Audio
         try:
             audio = discord.FFmpegPCMAudio(
@@ -76,22 +75,23 @@ class Player:
             )
         except discord.ClientException:
             eprint("_play_now", "The subprocess failed to be created")
-            return
+            return False
 
-        # create a player
-        player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
-        player = AudioSourceTracked(player)
-        player.read()
-
-        # play it
         try:
+            # create a player
+            player = discord.PCMVolumeTransformer(audio, volume=DEFAULT_VOLUME)
+            player = AudioSourceTracked(player)
+            player.read()
+            # play it
             self.voice.play(player, after=self._after)
+            return True
         except discord.ClientException:
             eprint("ClientException – Already playing audio or not connected")
         except TypeError:
             eprint("Source is not a AudioSource or after is not a callable")
         except discord.OpusNotLoaded:
             eprint("Source is not opus encoded and opus is not loaded")
+        return False
 
     @log_called_function
     async def _consume(self):
@@ -102,9 +102,12 @@ class Player:
             if req is not None:
                 debug("_consume >> PLAYING now")
                 self.state = Player.State.PLAYING
-                await self.join(req.message.author.voice.channel)
-                self._play_now(req)
-                return True
+                joined = await self.join(req.message.author.voice.channel)
+                if joined:
+                    self._play_now(req)
+                    return True
+                else:
+                    eprint("_consume", "Failed to join the channel")
             else:
                 debug("_consume", "(IDLE)", ">> nothing to consume !")
         elif self.state is self.State.PLAYING:
@@ -117,16 +120,20 @@ class Player:
 
     @log_called_function
     async def join(self, channel):
-        if self.voice is None or not self.voice.is_connected():
-            try:
+        try:
+            # connect
+            if self.voice is None or not self.voice.is_connected():
                 self.voice = await channel.connect()
-            except asyncio.TimeoutError:
-                return "Could not connect to the voice channel in time."
-            except discord.ClientException:
-                return "Already connected to a voice channel."
-        if self.voice.channel.id != channel.id:
-            await self.voice.move_to(channel)
-        return True
+            # move to a channel
+            if self.voice.channel.id != channel.id:
+                await self.voice.move_to(channel)
+        except asyncio.TimeoutError:
+            eprint("Could not connect to the voice channel in time.")
+        except discord.ClientException:
+            eprint("Already connected to a voice channel.")
+        else:
+            return True
+        return False
 
     @log_called_function
     async def play(self, req, top=False):
