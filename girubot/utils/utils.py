@@ -30,19 +30,6 @@ def debug(*args, **kwargs):
     print(msg, *args, **kwargs)
 
 
-def convert_to_youtube_time_format(total_seconds: float) -> str:
-    m, s = divmod(int(total_seconds), 60)
-    h, m = divmod(m, 60)
-
-    # if h == 0 and m == 0:
-    #    return "%02d" % (s)
-    if h == 0:
-        return "%02d:%02d" % (m, s)
-    return "%02d:%02d:%02d" % (h, m, s)
-
-    # return ["%02d" % x for x in (h, m, s)]
-
-
 def youtube_url_validation(url):
     youtube_regex = (
         r"(https?://)?(www\.)?"
@@ -80,16 +67,6 @@ def get_closest(word, possibilities):
     return None
 
 
-class Markdown:
-    @staticmethod
-    def bold(message):
-        return "**" + message + "**"
-
-    @staticmethod
-    def code(message):
-        return "`" + message + "`"
-
-
 def log_called_function(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -114,3 +91,16 @@ class SingletonMeta(type):
                 cls._instances[cls] = instance
         return cls._instances[cls]
 
+
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        out = AttrDict(d)
+        for k, v in d.items():
+            if isinstance(v, dict):
+                out[k] = AttrDict.from_dict(v)
+        return out

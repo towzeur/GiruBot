@@ -1,14 +1,10 @@
 import discord
-import json
 import traceback
 import sys
 
 from discord.ext import commands
 
-from utils import debug, eprint
-from music import Music
-from locales import Locales
-from others import Others
+from girubot.utils import debug, eprint
 
 
 class Giru(commands.Bot):
@@ -54,26 +50,14 @@ class Giru(commands.Bot):
             )
 
     async def on_message(self, message):
-        await self.process_commands(message)
+        if self.user.mentioned_in(message):
+            msg = f"{message.author.mention} hello !"
+            await message.channel.send(msg)
+        else:
+            await self.process_commands(message)
 
     #    # FILTER OWN SELF MESSAGE
     #    if message.author == self.user:
     #        return
     #    # debug("on_message", message)
-
-
-if __name__ == "__main__":
-
-    with open("secrets.json") as f:
-        secret = json.load(f)
-
-    bot = Giru(command_prefix="!")
-    bot.add_cog(Locales(bot))
-    bot.add_cog(Music(bot))
-    bot.add_cog(Others(bot))
-
-    try:
-        bot.run(secret["TOKEN"])
-    except discord.errors.LoginFailure:
-        eprint("Improper token has been passed.")
 

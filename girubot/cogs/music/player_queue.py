@@ -67,6 +67,8 @@ class PlayerQueue:
     def toggle_loopqueue(self):
         return self.toggle_modifier(PlayerQueue.Modifier.LOOP_QUEUE)
 
+    # --------------------------------------------------------------------------
+
     @property
     def loop_enabled(self) -> bool:
         return PlayerQueue.Modifier.LOOP in self.modifiers
@@ -111,6 +113,6 @@ class PlayerQueue:
         except IndexError:
             return False
         else:
-            self.close.append(elt)
+            # self.close.append(elt)
             return True
 
