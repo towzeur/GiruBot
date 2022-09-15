@@ -1,13 +1,20 @@
-import glob
-import json
+#import glob
+#import json
 import re
 import time
 import sys
 import io
+import os
 
-from termcolor import colored, cprint
+from termcolor import cprint  #, colored
 from functools import wraps
-from threading import Lock, Thread
+from threading import Lock
+
+
+def is_replit():
+    replit_keys = [k for k in os.environ.keys() if "REPL_" in k]
+    eprint('replit detected')
+    return bool(replit_keys)
 
 
 def sprint(*args, color="red", **kwargs):
@@ -31,11 +38,9 @@ def debug(*args, **kwargs):
 
 
 def youtube_url_validation(url):
-    youtube_regex = (
-        r"(https?://)?(www\.)?"
-        "(youtube|youtu|youtube-nocookie)\.(com|be)/"
-        "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})"
-    )
+    youtube_regex = (r"(https?://)?(www\.)?"
+                     "(youtube|youtu|youtube-nocookie)\.(com|be)/"
+                     "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})")
     youtube_regex_match = re.match(youtube_regex, url)
     return bool(youtube_regex_match)
 
@@ -58,7 +63,8 @@ def get_closest(word, possibilities):
         cleaned_word = clean(word)
         cleaned_possibilities = [clean(p) for p in possibilities]
 
-        closer_m = get_close_matches(cleaned_word, cleaned_possibilities, 1)  # list
+        closer_m = get_close_matches(cleaned_word, cleaned_possibilities,
+                                     1)  # list
 
         if closer_m:
             index = cleaned_possibilities.index(closer_m[0])

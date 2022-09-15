@@ -14,6 +14,10 @@ class Music(commands.Cog):
         self.bot = bot
         self.guilds_player = {}
 
+    # New async cog_load special method is automatically called
+    async def cog_load(self):
+        ...
+
     def get_player(self, ctx) -> Player:
         guild_id = ctx.guild.id
         if guild_id not in self.guilds_player:
@@ -63,17 +67,19 @@ class Music(commands.Cog):
         # create the content or embed
         content, embed = None, None
         if skip:  # playskip
-            embed = embeddings.play_queued(req, estimated="Now", position="Now")
+            embed = embeddings.play_queued(req,
+                                           estimated="Now",
+                                           position="Now")
         elif played_now:  # play
             content = locale.notif_playing_now.format(req.title)
         elif top:  # queued top
-            embed = embeddings.play_queued(
-                req, estimated=player.estimated_next, position=1
-            )
+            embed = embeddings.play_queued(req,
+                                           estimated=player.estimated_next,
+                                           position=1)
         else:  # queued
-            embed = embeddings.play_queued(
-                req, estimated=player.estimated, position=player.queue.waiting
-            )
+            embed = embeddings.play_queued(req,
+                                           estimated=player.estimated,
+                                           position=player.queue.waiting)
 
         await ctx.send(content=content, embed=embed)
         return True
@@ -267,3 +273,8 @@ class Music(commands.Cog):
     async def test(self, ctx):
         ...
 
+
+async def setup(bot):
+    
+    print('PIGI POP')
+    await bot.add_cog(Music(bot))

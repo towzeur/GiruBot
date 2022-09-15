@@ -2,7 +2,7 @@ import glob
 import json
 
 from os import stat
-from typing import Dict
+from typing import Dict, List
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,7 +27,7 @@ class Language(AttrDict):
         return cls.from_dict(lang)
 
     @staticmethod
-    def available() -> list[str]:
+    def available() -> List[str]:
         filenames = glob.glob(LOCALE_FILE_TEMPLATE.format("*"))
         return [Path(file).stem for file in filenames]
 
@@ -61,4 +61,3 @@ class Locales:
         language = self.get_language(ctx)
         message = language.get(giru_message).format(*args, **kwargs)
         await ctx.send(message)
-
