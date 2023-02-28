@@ -13,7 +13,8 @@ from girubot.config import (
     FFMPEG_OPTIONS,
     DEFAULT_VOLUME,
 )
-from girubot.utils import log_called_function, debug, eprint
+from girubot.utils import log_called_function  # , debug, eprint
+from loguru import logger
 
 
 class Player:
@@ -55,14 +56,14 @@ class Player:
     @log_called_function
     def _after(self, error=None):
         if error:
-            eprint("_after ERROR", error)
+            logger.error(f"_after ERROR: {error}")
         self.state = Player.State.IDLE
         self.queue.next()
         self.bot.loop.create_task(self._consume())
 
     @log_called_function
     def _play_now(self, req) -> bool:
-        print("_play_now >> vid :", req.info["webpage_url"])
+        logger.debug("req.info['webpage_url'] = " + str(req.info["webpage_url"]))
         # create an Audio
         try:
             audio = discord.FFmpegPCMAudio(
@@ -74,7 +75,7 @@ class Player:
                 options=FFMPEG_OPTIONS,
             )
         except discord.ClientException:
-            eprint("_play_now", "The subprocess failed to be created")
+            logger.error("[ClientException] Failed to create the subprocess")
             return False
 
         try:
@@ -86,34 +87,40 @@ class Player:
             self.voice.play(player, after=self._after)
             return True
         except discord.ClientException:
-            eprint("ClientException – Already playing audio or not connected")
+            logger.error("[ClientException] Already playing audio or not connected")
         except TypeError:
-            eprint("Source is not a AudioSource or after is not a callable")
+            logger.error(
+                "[TypeError] Source is not a AudioSource or after is not a callable"
+            )
         except discord.OpusNotLoaded:
-            eprint("Source is not opus encoded and opus is not loaded")
+            logger.error(
+                "[OpusNotLoaded] Source is not opus encoded and opus is not loaded"
+            )
         return False
 
     @log_called_function
     async def _consume(self):
-        debug("_consume", "flag", self.queue.flag, "modifiers", self.queue.modifiers)
+        msg = ("flag", self.queue.flag, "modifiers", self.queue.modifiers)
+        logger.debug(" ".join(map(str, msg)))
+
         if self.state is self.State.IDLE:
-            debug("_consume", "(IDLE)", ">> now PLAYING")
+            logger.debug("(IDLE) >> now PLAYING")
             req = self.queue.current
             if req is not None:
-                debug("_consume >> PLAYING now")
+                logger.debug("PLAYING now")
                 self.state = Player.State.PLAYING
                 joined = await self.join(req.message.author.voice.channel)
                 if joined:
                     self._play_now(req)
                     return True
                 else:
-                    eprint("_consume", "Failed to join the channel")
+                    logger.error("Failed to join the channel")
             else:
-                debug("_consume", "(IDLE)", ">> nothing to consume !")
+                logger.debug("(IDLE) >> nothing to consume !")
         elif self.state is self.State.PLAYING:
-            debug("_consume", "(PLAYING)", ">> queued")
+            logger.debug("(PLAYING) >> queued")
         else:
-            debug("_consume", "(UNKOWN)", ">> ?")
+            logger.debug("(UNKOWN) >> ?")
         return False
 
     # --------------------------------------------------------------------------
@@ -128,16 +135,18 @@ class Player:
             if self.voice.channel.id != channel.id:
                 await self.voice.move_to(channel)
         except asyncio.TimeoutError:
-            eprint("Could not connect to the voice channel in time.")
+            logger.error(
+                "[TimeoutError] Could not connect to the voice channel in time."
+            )
         except discord.ClientException:
-            eprint("Already connected to a voice channel.")
+            logger.error("[ClientException] Already connected to a voice channel.")
         else:
             return True
         return False
 
     @log_called_function
-    async def play(self, req, top=False):
-        """ 
+    async def play(self, req, top=False) -> bool:
+        """
         play the given req
         return False if enqueued
         """
@@ -146,7 +155,7 @@ class Player:
         return played_now
 
     @log_called_function
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         if self.voice:
             await self.voice.disconnect()
 
