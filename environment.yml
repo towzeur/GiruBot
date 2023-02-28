@@ -1,14 +1,22 @@
 name: giru
 channels:
-  - defaults
-  - conda-forge
   - anaconda
+  - conda-forge
+  - defaults
 dependencies:
   - termcolor
   - python-dotenv
+  - loguru
+  - conda-forge::ffmpeg
+  - conda-forge::flask
+  - conda-forge::pynacl
+  - conda-forge::black
   - pip
   - pip:
-      - flask
+      #- yt-dlp
+      - discord.py[voice]>=2.2.0
+      - setuptools
+      - wheel
+      # yt-dlp
+      #- https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz
       - yt-dlp
-      - pynacl
-      - discord.py[voice]
