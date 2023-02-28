@@ -2,7 +2,6 @@ import discord
 import asyncio
 
 from functools import partial
-from yt_dlp import YoutubeDL
 from time import perf_counter_ns
 from dataclasses import dataclass
 
@@ -24,7 +23,6 @@ class Request:
 
     @classmethod
     async def from_youtube(cls, query, message, blocking=True):
-
         # download info
         t0 = perf_counter_ns()
         info = await Downloader.get_info(query, blocking=blocking)

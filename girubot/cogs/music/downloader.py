@@ -1,13 +1,13 @@
 import asyncio
-import yt_dlp as youtube_dl
-
-youtube_dl.utils.bug_reports_message = lambda: ""
 
 from functools import partial
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 from girubot.utils import debug, eprint
+from girubot.dl import youtube_dl
+youtube_dl.utils.bug_reports_message = lambda: ""
+
 
 
 class DownloaderLogger:
