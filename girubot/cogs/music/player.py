@@ -2,6 +2,7 @@ import asyncio
 import discord
 
 from enum import Enum
+from typing import Optional
 
 from .player_queue import PlayerQueue
 from .audio_source_tracked import AudioSourceTracked
@@ -15,6 +16,21 @@ from girubot.config import (
 )
 from girubot.utils import log_called_function  # , debug, eprint
 from loguru import logger
+
+
+def assert_get_voice(func):
+    # create a decorator that will decorate method of the Player class
+    # and need to be async to be able to use await
+    # before entering the method, it will call self.get_voice()
+    # if the method returns None, it will return False
+    # otherwise, it will return the result of the method
+    async def wrapper(self, *args, **kwargs):
+        voice = await self.get_voice()
+        if voice is None:
+            return False
+        return await func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class Player:
@@ -36,6 +52,28 @@ class Player:
 
     def is_idle(self) -> bool:
         return self.state is Player.State.IDLE
+
+    async def get_voice(
+        self,
+        channel: Optional[discord.VoiceChannel] = None,
+    ) -> Optional[discord.VoiceClient]:
+        """
+        Return the current voice client if any
+        or create a new one if none
+        """
+        vc_exists = isinstance(self.voice, discord.VoiceClient)
+        ch_given = isinstance(channel, discord.VoiceChannel)
+        if not vc_exists and not ch_given:
+            return None
+        # a channel is given
+        if ch_given:
+            # create a new voice client
+            if not vc_exists or not self.voice.is_connected():
+                self.voice = await channel.connect()
+            # move it to the given channel
+            if self.voice.channel.id != channel.id:
+                await self.voice.move_to(channel)
+        return self.voice
 
     @property
     def estimated(self) -> float:
@@ -128,20 +166,14 @@ class Player:
     @log_called_function
     async def join(self, channel):
         try:
-            # connect
-            if self.voice is None or not self.voice.is_connected():
-                self.voice = await channel.connect()
-            # move to a channel
-            if self.voice.channel.id != channel.id:
-                await self.voice.move_to(channel)
+            await self.get_voice(channel)
+            return True
         except asyncio.TimeoutError:
             logger.error(
                 "[TimeoutError] Could not connect to the voice channel in time."
             )
         except discord.ClientException:
             logger.error("[ClientException] Already connected to a voice channel.")
-        else:
-            return True
         return False
 
     @log_called_function
@@ -155,17 +187,12 @@ class Player:
         return played_now
 
     @log_called_function
-    async def disconnect(self) -> None:
-        if self.voice:
-            await self.voice.disconnect()
-
-    @log_called_function
+    @assert_get_voice
     async def skip(self) -> bool:
-        skiped = self.voice and self.is_playing()
-        if skiped:
+        if self.is_playing():
             self.queue.set_skip()
             self.voice.stop()
-        return skiped
+            return True
 
     @log_called_function
     async def loop(self) -> bool:
@@ -176,32 +203,30 @@ class Player:
         return self.queue.toggle_loopqueue()
 
     @log_called_function
+    @assert_get_voice
     async def replay(self) -> bool:
-        replayed = self.voice and self.is_playing()
-        if replayed:
+        if self.is_playing():
             self.queue.set_replay()
             self.voice.stop()
-        return replayed
+            return True
 
     @log_called_function
+    @assert_get_voice
     async def disconnect(self) -> bool:
-        disconnected = self.voice is not None
-        if disconnected:
+        if self.voice.is_connected():
             await self.voice.disconnect()
-            del self.voice
-            self.voice = None
-        return disconnected
+            return True
 
     @log_called_function
+    @assert_get_voice
     async def pause(self) -> bool:
         if self.voice.is_playing():
             self.voice.pause()
             return True
-        return False
 
     @log_called_function
+    @assert_get_voice
     async def resume(self) -> bool:
         if self.voice.is_paused():
             self.voice.resume()
             return True
-        return False
