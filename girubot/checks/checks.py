@@ -39,6 +39,6 @@ async def is_playing(ctx) -> bool:
     player = ctx.bot.get_cog("Music").get_player(ctx)
     cond = player.is_playing()
     if not cond:
-        lang = locales.get(ctx)
+        lang = locales.get_language(ctx)
         await ctx.send(lang.error_nothing_playing)
     return cond
