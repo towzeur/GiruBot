@@ -7,11 +7,11 @@ dependencies:
   - python-dotenv
   - loguru
   - ffmpeg
-  #- libiconv
   - flask
+  - anaconda::libffi
   - black
   - pip
   - pip:
       - yt-dlp
-      - discord.py[voice]>=2.2.0
-      - pynacl
+      - PyNaCl
+      - discord.py[voice]

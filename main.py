@@ -57,19 +57,21 @@ def main():
     # bot.add_cog(Others(bot))
     # bot.add_cog(Utility(bot))
 
-    try:
-        bot.run(token)
-    except discord.errors.LoginFailure:
-        eprint("Improper token has been passed.")
+    while True:
+        try:
+            bot.run(token)
+        except discord.errors.LoginFailure:
+            eprint("Improper token has been passed.")
 
-    except discord.errors.HTTPException as e:
-        # discord.errors.HTTPException
-        # 'args', 'code', 'response', 'status', 'text', 'with_traceback'
-        print("[Debug] code", e.code)
-        print("[Debug] status", e.status)
-        # print("[Debug] response", e.response)
-        if e.code == 429:  # too many Requests
-            eprint("> too many Requests")
+        except discord.errors.HTTPException as e:
+            # discord.errors.HTTPException
+            # 'args', 'code', 'response', 'status', 'text', 'with_traceback'
+            print("[Debug] code", e.code)
+            print("[Debug] status", e.status)
+            # print("[Debug] response", e.response)
+            if e.code == 429:  # too many Requests
+                eprint("> too many Requests")
+        time.sleep(60)
 
 
 if __name__ == "__main__":

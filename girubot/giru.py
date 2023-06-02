@@ -14,7 +14,7 @@ class Giru(commands.Bot):
         self.game = discord.Game(name)
         self.initial_extensions = [
             "girubot.cogs.music",
-            #'cogs.foo',
+            "girubot.cogs.utility",
             #'cogs.bar',
         ]
         logger.debug("Giru init")
@@ -41,7 +41,8 @@ class Giru(commands.Bot):
 
     async def on_ready(self):
         logger.info(f"Logged on as {self.user}")
-        await self.change_presence(status=discord.Status.online, activity=self.game)
+        await self.change_presence(status=discord.Status.online,
+                                   activity=self.game)
 
     async def on_disconnect(self):
         pass
@@ -69,10 +70,12 @@ class Giru(commands.Bot):
         elif isinstance(error, commands.errors.CommandNotFound):
             eprint("CommandNotFound", error, commands.errors.CommandNotFound)
         else:
-            print(f"Ignoring exception in command {ctx.command}:", file=sys.stderr)
-            traceback.print_exception(
-                type(error), error, error.__traceback__, file=sys.stderr
-            )
+            print(f"Ignoring exception in command {ctx.command}:",
+                  file=sys.stderr)
+            traceback.print_exception(type(error),
+                                      error,
+                                      error.__traceback__,
+                                      file=sys.stderr)
 
     async def on_message(self, message):
         if self.user.mentioned_in(message):

@@ -1,27 +1,47 @@
-language = "python3"
+language="python3"
+onBoot = "date >> /home/runner/hello.txt"
 entrypoint = "main.py"
-
-onBoot = "touch /home/runner/hello.txt"
-
-#run = "python main.py"
 run = "bash ./setup.sh --filename main.py"
+
+# Specifies which nix channel to use when building the environment.
+[nix]
+channel = "stable-22_11"
+
+[[hints]]
+regex = "stderred: .+GLIBC.+not found"
+message = "The command `stderred` is known to cause issues. It's recommended you remove it from your .replit configuration."
 
 [env]
 VIRTUAL_ENV="/home/runner/micromamba/envs/giru"
 PATH="/home/runner/micromamba/envs/giru/bin:$PATH"
 PYTHONPATH="/home/runner/micromamba/envs/giru/lib/python3.10/site-packages"
 
+# Enable unit tests. This is only supported for a few languages.
+[unitTest]
+language = "python3"
+
 # Configures the packager.
 [packager]
-# Search packages in PyPI.
 language = "python3"
-# Never attempt to install `unit_tests`. If there are packages that are being
-# guessed wrongly, add them here.
-ignoredPackages = []
+ignoredPackages = ["unit_tests"]
 
   [packager.features]
-  enabledForHosting = false
+   enabledForHosting = false
   # Enable searching packages from the sidebar.
   packageSearch = false
   # Enable guessing what packages are needed from the code.
   guessImports = false
+
+# These are the files that need to be preserved when this 
+# language template is used as the base language template
+# for Python repos imported from GitHub
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix", ".config", "venv"]
+
+[languages]
+
+    [languages.python3]
+    pattern = "**/*.py"
+    
+    [languages.python3.languageServer]
+    start = "pylsp"

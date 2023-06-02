@@ -1,0 +1,27 @@
+language = "python3"
+entrypoint = "" #main.py
+
+onBoot = "date >> /home/runner/hello.txt"
+
+#run = "python main.py"
+run = "bash ./setup.sh --filename main.py"
+
+[env]
+VIRTUAL_ENV="/home/runner/micromamba/envs/giru"
+PATH="/home/runner/micromamba/envs/giru/bin:$PATH"
+PYTHONPATH="/home/runner/micromamba/envs/giru/lib/python3.10/site-packages"
+
+# Configures the packager.
+[packager]
+# Search packages in PyPI.
+language = "python3"
+# Never attempt to install `unit_tests`. If there are packages that are being
+# guessed wrongly, add them here.
+ignoredPackages = []
+
+  [packager.features]
+  enabledForHosting = false
+  # Enable searching packages from the sidebar.
+  packageSearch = false
+  # Enable guessing what packages are needed from the code.
+  guessImports = false
