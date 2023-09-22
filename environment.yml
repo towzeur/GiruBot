@@ -1,14 +1,14 @@
-name: giru
+name: girubot
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
+  - python
   - termcolor
   - python-dotenv
   - loguru
   - ffmpeg
   - flask
-  - anaconda::libffi
+  - libffi
   - black
   - pip
   - pip:

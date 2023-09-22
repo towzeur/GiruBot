@@ -1,42 +1,37 @@
 #!/bin/bash
+
 set -e
-export MAMBA_EXE="/home/runner/.local/bin/micromamba";
+
 export MAMBA_ROOT_PREFIX="/home/runner/micromamba";
+export MAMBA_EXE=$MAMBA_ROOT_PREFIX"/envs/$REPL_SLUG/bin/python";
 
 # check if MAMBA_EXE exists and is executable
-if ! [ -x "$MAMBA_EXE" ]; then
+#if ! [ -x "$MAMBA_EXE" ]; then
+uname --machine
+if ! [ -x "./bin/micromamba" ]; then
     echo "Installing micromamba"
-    curl micro.mamba.pm/install.sh | bash
+    # Linux Intel (x86_64):
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+    # Linux ARM64:
+    #curl -Ls https://micro.mamba.pm/api/micromamba/linux-aarch64/latest | tar -xvj bin/micromamba
 fi
-# >>> mamba initialize >>>
-# !! Contents within this block are managed by 'mamba init' !!
-__mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__mamba_setup"
-else
-    if [ -f "/home/runner/micromamba/etc/profile.d/micromamba.sh" ]; then
-        . "/home/runner/micromamba/etc/profile.d/micromamba.sh"
-    else
-        export  PATH="/home/runner/micromamba/bin:$PATH"  # extra space after export prevents interference from conda init
-    fi
-fi
-unset __mamba_setup
-# <<< mamba initialize <<<
+
+echo "shell hook micromamba"
+eval "$(./bin/micromamba shell hook -s posix)"
 
 
 # check if env exists
-if ! micromamba env list | grep -q giru
-then
+echo "Check if env exists"
+if ! micromamba env list | grep -q $REPL_SLUG ; then
     echo "Creating environment"
     micromamba env create -f "/home/runner/$REPL_SLUG/environment.yml" -y
 fi
 
-
+echo "Activate giru env"
 micromamba activate giru
 which python
 which python3
-
-printenv
+#printenv
 
 # find arguments --name that need to be run
 # and run them
