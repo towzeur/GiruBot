@@ -2,8 +2,11 @@
 
 set -e
 
+#export ENV_NAME=$(echo "$REPL_SLUG" | tr '[:upper:]' '[:lower:]')
+
 export MAMBA_ROOT_PREFIX="/home/runner/micromamba";
 export MAMBA_EXE=$MAMBA_ROOT_PREFIX"/envs/$REPL_SLUG/bin/python";
+
 
 # check if MAMBA_EXE exists and is executable
 #if ! [ -x "$MAMBA_EXE" ]; then
@@ -27,8 +30,8 @@ if ! micromamba env list | grep -q $REPL_SLUG ; then
     micromamba env create -f "/home/runner/$REPL_SLUG/environment.yml" -y
 fi
 
-echo "Activate giru env"
-micromamba activate giru
+echo "Activate env"
+micromamba activate $REPL_SLUG
 which python
 which python3
 #printenv

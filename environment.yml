@@ -1,4 +1,4 @@
-name: girubot
+name: GiruBot
 channels:
   - conda-forge
 dependencies:
